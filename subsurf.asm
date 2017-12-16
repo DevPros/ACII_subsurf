@@ -106,7 +106,8 @@ NLINE3:
 DPART ENDP
 MOVIM PROC NEAR
 VOLTA:
-		
+		MOV AL,04
+		CALL TABGAME
 		XOR BX,BX
 		XOR CX,CX
 		MOV AX,3
@@ -124,16 +125,22 @@ VOLTA:
 		CMP CX,320
 		JBE dir
 		
+		mov AH,01 			;ve o estado do teclado 
+		int 16h				;envoca interrupção da bios para o teclado
+		jz volta
+		
+		mov AH,00H			; vai ler o valor do teclado
+		int 16H				;envoca interrupção da bios para o teclado
 		;MOV AH,01			;Escrever no ecrã
 							;@param AL caracter		
 		;INT 21h				;Interrupção 21H(DOS)
-		;CALL LIMPACARECRA	;retira do ecrã o caracter premido
-		;CMP AL,'j'			;Compara o caracter com a letra 'a'
-		;JE esq				;salta para o movimento que faz mexer o quadrado para a esquerda
+		CALL LIMPACARECRA	;retira do ecrã o caracter premido
+		CMP AL,'j'			;Compara o caracter com a letra 'a'
+		JE esq				;salta para o movimento que faz mexer o quadrado para a esquerda
 		;CMP AL,'k'			;Compara o caracter com a letra 's'
 		;JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
-		;CMP AL,'l'			;Compara o caracter com a letra 'd'
-		;JE dir				;salta para o movimento que faz mexer o quadrado para a direita
+		CMP AL,'l'			;Compara o caracter com a letra 'd'
+		JE dir				;salta para o movimento que faz mexer o quadrado para a direita
 		;CMP AL,'i'			;Compara o caracter com a letra 'd'
 		;JE cima	
 		CMP AL,'q'			;Compara o caracter com a letra 'q'
