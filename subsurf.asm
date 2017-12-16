@@ -4,7 +4,8 @@ STACK ENDS
 MYDATA SEGMENT PARA 'DATA'
 		ESQPART		DW  20
 		MEIOPART	DW  80
-		DIRPART		DW  120
+		DIRPART		DW  140
+		POSITION	DW  1
 		initpart	DW  190
 		LIMPART		DW	199
 		cump		DW  20
@@ -24,20 +25,24 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 
 		MOV AH,11			;Palete de cores
-		MOV BH,01			;Palete de cores
-		MOV BL,01			;Cores Primárias
+		MOV BH,00			;FOREGROUND
+		MOV BL,00			;COR DE FUNDO
 		INT 10h				;serviços de video e ecrã
 		
 		MOV AH,11			;Palete de cores
-		MOV BH,00			;Palete de cores
-		MOV BL,01			;Cores Primárias
+		MOV BH,01			;Palete de cores
+		MOV BL,00			;Cores Primárias
 		INT 10h				;serviços de video e ecrã
-		CALL INITMOUSE
-		MOV AL,04
+		
+		
+		CALL INITMOUSE		;INICIAR O RATO
+		
+		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
 		CALL TABGAME
-		MOV AL,02
-		CALL MPART
-		CALL MOVIM
+		MOV AL,09			;https://en.wikipedia.org/wiki/Enhanced_Graphics_Adapter
+		CALL MPART			;INSERSÃO DA PEÇA DO MEIO
+		
+		CALL MOVIM			;PROCEDIMENTO DA MOVIMENTAÇÃO DO BONECO
 		
 		MOV AH,00h			;SET MODE VIDEO
 		MOV AL,02h			;80x25 TEXT
@@ -50,32 +55,43 @@ MYPROC ENDP
 INITMOUSE PROC NEAR
 		MOV AX,1				;Mostra o cursor
 		INT 33H	
-						;Horizontal
-		MOV AX,7				;Limite de movimento
-		MOV CX,0	
-		MOV DX,639				;Limite de Pixeis
+		
+		MOV AX,04
+		MOV CX,180
+		MOV DX,100
+		INT 33h
+								;
+		MOV AX,7				;Limite de movimento Horizontal
+		MOV CX,0				;LIMITE MINIMO
+		MOV DX,359				;LIMITE MAXIMO
 		INT 33H
-								;vertical
-		MOV AX,8				;Limite de movimento
-		MOV CX,0			
-		MOV DX,199				;Limite de Pixeis
+
+		MOV AX,8				;Limite de movimento Verical
+		MOV CX,0				;LIMITE MINIMO
+		MOV DX,199				;LIMITE MAXIMO
 		INT 33H
 RET
 INITMOUSE ENDP
+;--------------------------------------------------------------------------------------
+;---Boneco do meio
+;--------------------------------------------------------------------------------------
 MPART PROC NEAR
-		MOV DX,initpart
+		MOV DX,initpart;VALOR TOPO DA PEÇA
 NLINE1:
-		MOV BX,CUMP
-		INC DX
-		MOV CX,MEIOPART
-		CALL rhoriz
-		PUSH AX
-		MOV AX,LIMPART
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,MEIOPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPART	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
 		CMP DX,AX
 		POP AX
-		JNE NLINE1
+		JNE NLINE1		;SE NÃO REPETE
 	RET
 MPART ENDP
+;--------------------------------------------------------------------------------------
+;---Boneco do lado Esquerdo
+;--------------------------------------------------------------------------------------
 EPART PROC NEAR
 		MOV DX,initpart
 NLINE2:
@@ -90,6 +106,9 @@ NLINE2:
 		JNE NLINE2
 	RET
 EPART ENDP
+;--------------------------------------------------------------------------------------
+;---Boneco do lado Direito
+;--------------------------------------------------------------------------------------
 DPART PROC NEAR
 		MOV DX,initpart
 NLINE3:
@@ -106,78 +125,104 @@ NLINE3:
 DPART ENDP
 MOVIM PROC NEAR
 VOLTA:
-		MOV AL,04
-		CALL TABGAME
+		MOV AL,15		;BRANCO
+		CALL TABGAME	;REPINTA O TABULEIRO
 		XOR BX,BX
-		XOR CX,CX
-		MOV AX,3
-		INT 33H
-		AND BX,07
-		CMP BX,2
-		JE finish
+		XOR CX,CX		
+		MOV AX,3		;ESTADO DO RATO
+		INT 33H			;Interrupção DO RATO
+		AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
+		CMP BX,2		;Verifica o BOTÃO DIREITO
+		JE finish		;CASO ELE SEJA PREMIDO SAI DO PROCEDIMENTO
 		;AND BX,07
 		;CMP BX,1
 		;JNE VOLTA
-		CMP CX,120
-		JBE esq
-		CMP CX,240
-		JBE meio
-		CMP CX,320
-		JBE dir
-		
-		mov AH,01 			;ve o estado do teclado 
+		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
+		JBE esq			;MOVE PARA A ESQUERDA
+		CMP CX,240		;SE RATO ESTIVER NA ENTRE OS 61 e 120 PIXEIS
+		JBE meio		;MOVE PARA O MEIO
+		CMP CX,320		;SE RATO ESTIVER NA ENTRE OS 121 e 180 PIXEIS
+		JBE dir			;MOVE PARA A DIREITA
+		;SE AS CONDIÇÕES NÂO FOREM SATISFEITAS O TECLADO ASSUME AS FUNÇõES DOS MOVIMENTOS
+		mov AH,01 			;VERIFICA O ESTADO DO TECLADO
 		int 16h				;envoca interrupção da bios para o teclado
-		jz volta
+		jz volta			;SE FOR 0 É PORQUE NÃO FOI UTILIZADO E VOLTA A PERGUNTAR
 		
-		mov AH,00H			; vai ler o valor do teclado
+		mov AH,00H			;LE O VALOR DO TECLADO
+							;@param AL caracter	
 		int 16H				;envoca interrupção da bios para o teclado
-		;MOV AH,01			;Escrever no ecrã
-							;@param AL caracter		
-		;INT 21h				;Interrupção 21H(DOS)
 		CALL LIMPACARECRA	;retira do ecrã o caracter premido
-		CMP AL,'j'			;Compara o caracter com a letra 'a'
-		JE esq				;salta para o movimento que faz mexer o quadrado para a esquerda
+		CMP AL,'j'			;Compara o caracter com a letra 'j'
+		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
 		;CMP AL,'k'			;Compara o caracter com a letra 's'
 		;JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
-		CMP AL,'l'			;Compara o caracter com a letra 'd'
-		JE dir				;salta para o movimento que faz mexer o quadrado para a direita
+		CMP AL,'l'			;Compara o caracter com a letra 'l'
+		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
 		;CMP AL,'i'			;Compara o caracter com a letra 'd'
 		;JE cima	
-		CMP AL,'q'			;Compara o caracter com a letra 'q'
+		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
 		JE finish	
-		JMP VOLTA		;Salta para o fim do programa
+		JMP VOLTA			;Salta para o fim do programa
+movEsq:
+		MOV AX,POSITION
+		CMP AX,0			;Verifica se já está na esquerda
+		JE esq				;Se SIM salta para o procedimento de mudar para a esquerda
+		CMP AX,1			;Verifica se já está na esquerda
+		JE esq				;Se SIM salta para o procedimento de mudar para a esquerda
+		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
+movDir:
+		MOV AX,POSITION
+		CMP AX,2			;Verifica se já está na direita
+		JE dir				;Se SIM salta para o procedimento de mudar para a direita
+		CMP AX,1			;Verifica se já está no meio
+		JE dir				;Se SIM salta para o procedimento de mudar para a direita
+		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
 meio:
-		MOV AL,00
-		CALL EPART
-		MOV AL,00
-		CALL DPART
-		MOV AL,02
-		CALL MPART
-		JMP VOLTA		;vai pedir novo movimento
+		CALL MIDLE
+		JMP VOLTA			;vai pedir novo movimento
 esq: 
-		MOV AL,00
-		CALL DPART
-		MOV AL,00
-		CALL MPART
-		MOV AL,02
-		CALL EPART
-		JMP VOLTA		;vai pedir novo movimento
+		CALL LEFT
+		JMP VOLTA			;vai pedir novo movimento
 dir:
-		MOV AL,00
-		CALL EPART
-		MOV AL,00
-		CALL MPART
-		MOV AL,02
-		CALL DPART
-		JMP VOLTA		;vai pedir novo movimento
+		CALL RIGHT
+		JMP VOLTA			;vai pedir novo movimento
 cima:
-		jmp VOLTA	
+		jmp VOLTA			;Caso nenhuma das condições não seja satisfeita repete
 baixo:
-		JMP VOLTA		
-		;Caso nenhuma das condições não seja satisfeita repete
+		JMP VOLTA			;Caso nenhuma das condições não seja satisfeita repete
 finish:
 		ret	
 MOVIM ENDP
+LEFT PROC NEAR
+		MOV POSITION,0
+		MOV AL,00			;COR DO BACKGROUND
+		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,00			;COR DO BACKGROUND
+		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,09			;COR 02
+		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+LEFT ENDP
+MIDLE PROC NEAR
+		MOV POSITION,1
+		MOV AL,00			;COR DO BACKGROUND
+		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,00			;COR DO BACKGROUND
+		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,09			;COR DO BACKGROUND
+		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+MIDLE ENDP
+RIGHT PROC NEAR
+		MOV POSITION,2
+		MOV AL,00			;COR DO BACKGROUND
+		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,00			;COR DO BACKGROUND
+		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		MOV AL,09			;COR 02
+		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+RIGHT ENDP
 ;--------------------------------------------------------------------------
 ;posiciona as uma string vazia para ocultar os caracteres escritos no ecrã ao movimentar as teclas
 ;--------------------------------------------------------------------------
@@ -237,29 +282,30 @@ inicio2:
 sai2:	
 	ret						;Termina o procedimento
 rhoriz endp 
-
+;--------------------------------------------------------------------------------------------------
+;------TABULEIRO DO JOGO---------------------------------------------------------------------------
+;--------------------------------------------------------------------------------------------------
 TABGAME PROC NEAR
 		
-		mov dx,00		;Vertical
-		mov cx,00	;Horizontal
+		mov dx,00			;Vertical
+		mov cx,00			;Horizontal
 		mov bx,180			;cumprimento
 		call rhoriz
 		
-		mov dx,00		;Vertical
-		mov cx,00	;Horizontal
+		mov dx,00			;Vertical
+		mov cx,00			;Horizontal
 		mov bx,200			;cumprimento
 		call rVertic
 
-		mov dx,200	;Vertical
-		mov cx,0h	;Horizontal
+		mov dx,200			;Vertical
+		mov cx,0h			;Horizontal
 		mov bx,180			;cumprimento
 		call rhoriz
 
-		mov dx,0		;Vertical
-		mov cx,180	;Horizontal
-		mov bx,200		;cumprimento
+		mov dx,0			;Vertical
+		mov cx,180			;Horizontal
+		mov bx,200			;cumprimento
 		call rVertic
-		
 		
 	RET
 TABGAME ENDP
