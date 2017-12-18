@@ -8,6 +8,8 @@ MYDATA SEGMENT PARA 'DATA'
 		POSITION	DW  1
 		initpart	DW  190
 		LIMPART		DW	199
+		initpartC	DW  180
+		LIMPARTC	DW	189
 		cump		DW  20
 		stringVazia DW  0fffh DUP (' '),'$'
 MYDATA ENDS
@@ -33,12 +35,12 @@ MYPROC PROC FAR
 		MOV BH,01			;Palete de cores
 		MOV BL,00			;Cores Primárias
 		INT 10h				;serviços de video e ecrã
-		
-		
+			
 		CALL INITMOUSE		;INICIAR O RATO
 		
 		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
 		CALL TABGAME
+		CALL LIMPAAREA
 		MOV AL,09			;https://en.wikipedia.org/wiki/Enhanced_Graphics_Adapter
 		CALL MPART			;INSERSÃO DA PEÇA DO MEIO
 		
@@ -49,6 +51,18 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 	RET 
 MYPROC ENDP
+LIMPAAREA PROC NEAR
+		MOV AL,0
+		MOV DX,180;VALOR TOPO DA PEÇA
+NLINE34:
+		MOV BX,140;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,20;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		CMP DX,199
+		JNE NLINE34		;SE NÃO REPETE
+	RET
+LIMPAAREA ENDP
 ;--------------------------------------------------------------------------
 ;Procedimento para iniciar o rato
 ;--------------------------------------------------------------------------
@@ -63,7 +77,7 @@ INITMOUSE PROC NEAR
 								;
 		MOV AX,7				;Limite de movimento Horizontal
 		MOV CX,0				;LIMITE MINIMO
-		MOV DX,359				;LIMITE MAXIMO
+		MOV DX,639				;LIMITE MAXIMO
 		INT 33H
 
 		MOV AX,8				;Limite de movimento Verical
@@ -76,6 +90,95 @@ INITMOUSE ENDP
 ;---Boneco do meio
 ;--------------------------------------------------------------------------------------
 MPART PROC NEAR
+		PUSH DX
+		PUSH AX
+		MOV AX,3		;ESTADO DO RATO
+		INT 33H			;Interrupção DO RATO	
+		CMP CX,359
+		JAE TRES2
+		CMP DX,100
+		JBE UM
+TRES2:	
+		CALL MEBAIXO
+		JBE FINA
+UM:
+		CALL MECIMA
+FINA:
+		POP AX
+		POP DX
+	RET
+MPART ENDP
+;--------------------------------------------------------------------------------------
+;---Boneco do lado Esquerdo
+;--------------------------------------------------------------------------------------
+EPART PROC NEAR
+		PUSH DX
+		PUSH AX
+		MOV AX,3		;ESTADO DO RATO
+		INT 33H			;Interrupção DO RATO
+		CMP CX,359
+		JAE TRES1
+		CMP DX,100
+		JBE UM1
+TRES1:
+		CALL ESBAIXO
+		JMP FINA1
+UM1:
+		CALL ESCIMA
+FINA1:
+		POP AX
+		POP DX
+	RET
+EPART ENDP
+;--------------------------------------------------------------------------------------
+;---Boneco do lado Direito
+;--------------------------------------------------------------------------------------
+DPART PROC NEAR
+		PUSH DX
+		PUSH AX
+		MOV AX,3		;ESTADO DO RATO
+		INT 33H			;Interrupção DO RATO
+		CMP CX,359
+		JAE TRES
+		CMP DX,100
+		JBE UM3
+TRES:
+		CALL DIBAIXO
+		JMP FINA3
+UM3:
+		CALL DICIMA
+FINA3:
+		POP AX
+		POP DX
+	RET
+DPART ENDP
+ESBAIXO PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
+		MOV DX,initpart;VALOR TOPO DA PEÇA
+NLINE2:
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,ESQPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPART	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
+		CMP DX,AX
+		POP AX
+		JNE NLINE2		;SE NÃO REPETE
+		POP AX
+		POP BX
+		POP CX
+		POP DX
+	RET
+ESBAIXO ENDP
+MEBAIXO PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
 		MOV DX,initpart;VALOR TOPO DA PEÇA
 NLINE1:
 		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
@@ -87,42 +190,100 @@ NLINE1:
 		CMP DX,AX
 		POP AX
 		JNE NLINE1		;SE NÃO REPETE
-	RET
-MPART ENDP
-;--------------------------------------------------------------------------------------
-;---Boneco do lado Esquerdo
-;--------------------------------------------------------------------------------------
-EPART PROC NEAR
-		MOV DX,initpart
-NLINE2:
-		MOV BX,CUMP
-		INC DX
-		MOV CX,ESQPART
-		CALL rhoriz
-		PUSH AX
-		MOV AX,LIMPART
-		CMP DX,AX
 		POP AX
-		JNE NLINE2
+		POP BX
+		POP CX
+		POP DX
 	RET
-EPART ENDP
-;--------------------------------------------------------------------------------------
-;---Boneco do lado Direito
-;--------------------------------------------------------------------------------------
-DPART PROC NEAR
-		MOV DX,initpart
+MEBAIXO ENDP
+DIBAIXO PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
+		MOV DX,initpart;VALOR TOPO DA PEÇA
 NLINE3:
-		MOV BX,CUMP
-		INC DX
-		MOV CX,DIRPART
-		CALL rhoriz
-		PUSH AX
-		MOV AX,LIMPART
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,DIRPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPART	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
 		CMP DX,AX
 		POP AX
-		JNE NLINE3
+		JNE NLINE3		;SE NÃO REPETE
+		POP AX
+		POP BX
+		POP CX
+		POP DX
 	RET
-DPART ENDP
+DIBAIXO ENDP
+DICIMA PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
+		MOV DX,initpartC;VALOR TOPO DA PEÇA
+NLINE32:
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,DIRPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPARTC	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
+		CMP DX,AX
+		POP AX
+		JNE NLINE32		;SE NÃO REPETE
+		POP AX
+		POP BX
+		POP CX
+		POP DX
+	RET
+DICIMA ENDP
+ESCIMA PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
+		MOV DX,initpartC;VALOR TOPO DA PEÇA
+NLINE22:
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,ESQPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPARTC	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
+		CMP DX,AX
+		POP AX
+		JNE NLINE22		;SE NÃO REPETE
+		POP AX
+		POP BX
+		POP CX
+		POP DX
+	RET
+ESCIMA ENDP
+MECIMA PROC NEAR
+		PUSH DX
+		PUSH CX
+		PUSH BX
+		PUSH AX
+		MOV DX,initpartC;VALOR TOPO DA PEÇA
+NLINE12:
+		MOV BX,CUMP;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,MEIOPART;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		PUSH AX			;GUARDA AX NA PILHA
+		MOV AX,LIMPARTC	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
+		CMP DX,AX
+		POP AX
+		JNE NLINE12		;SE NÃO REPETE
+		POP AX
+		POP BX
+		POP CX
+		POP DX
+	RET
+MECIMA ENDP
 MOVIM PROC NEAR
 VOLTA:
 		MOV AL,15		;BRANCO
@@ -134,14 +295,11 @@ VOLTA:
 		AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
 		CMP BX,2		;Verifica o BOTÃO DIREITO
 		JE finish		;CASO ELE SEJA PREMIDO SAI DO PROCEDIMENTO
-		;AND BX,07
-		;CMP BX,1
-		;JNE VOLTA
 		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
 		JBE esq			;MOVE PARA A ESQUERDA
 		CMP CX,240		;SE RATO ESTIVER NA ENTRE OS 61 e 120 PIXEIS
 		JBE meio		;MOVE PARA O MEIO
-		CMP CX,320		;SE RATO ESTIVER NA ENTRE OS 121 e 180 PIXEIS
+		CMP CX,359		;SE RATO ESTIVER NA ENTRE OS 121 e 180 PIXEIS
 		JBE dir			;MOVE PARA A DIREITA
 		;SE AS CONDIÇÕES NÂO FOREM SATISFEITAS O TECLADO ASSUME AS FUNÇõES DOS MOVIMENTOS
 		mov AH,01 			;VERIFICA O ESTADO DO TECLADO
@@ -154,28 +312,24 @@ VOLTA:
 		CALL LIMPACARECRA	;retira do ecrã o caracter premido
 		CMP AL,'j'			;Compara o caracter com a letra 'j'
 		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
-		;CMP AL,'k'			;Compara o caracter com a letra 's'
-		;JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
+		CMP AL,'k'			;Compara o caracter com a letra 's'
+		JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
 		CMP AL,'l'			;Compara o caracter com a letra 'l'
 		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
-		;CMP AL,'i'			;Compara o caracter com a letra 'd'
-		;JE cima	
+		CMP AL,'i'			;Compara o caracter com a letra 'd'
+		JE cima	
 		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
 		JE finish	
 		JMP VOLTA			;Salta para o fim do programa
 movEsq:
 		MOV AX,POSITION
-		CMP AX,0			;Verifica se já está na esquerda
-		JE esq				;Se SIM salta para o procedimento de mudar para a esquerda
 		CMP AX,1			;Verifica se já está na esquerda
-		JE esq				;Se SIM salta para o procedimento de mudar para a esquerda
+		JBE esq				;Se SIM salta para o procedimento de mudar para a esquerda
 		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
 movDir:
 		MOV AX,POSITION
-		CMP AX,2			;Verifica se já está na direita
-		JE dir				;Se SIM salta para o procedimento de mudar para a direita
 		CMP AX,1			;Verifica se já está no meio
-		JE dir				;Se SIM salta para o procedimento de mudar para a direita
+		JAE dir				;Se SIM salta para o procedimento de mudar para a direita
 		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
 meio:
 		CALL MIDLE
@@ -187,38 +341,77 @@ dir:
 		CALL RIGHT
 		JMP VOLTA			;vai pedir novo movimento
 cima:
-		jmp VOLTA			;Caso nenhuma das condições não seja satisfeita repete
+		call CIMAP
+		JMP VOLTA
 baixo:
-		JMP VOLTA			;Caso nenhuma das condições não seja satisfeita repete
+		call BAIXOP
+		JMP VOLTA
 finish:
 		ret	
 MOVIM ENDP
+CIMAP PROC NEAR
+		PUSH AX
+		MOV AX,POSITION
+		CMP AX,1
+		POP AX
+		JB ecima
+		JE mcima
+		JA dcima
+		jmp fin			;Caso nenhuma das condições não seja satisfeita repete
+ecima:
+		MOV AL,09	
+		CALL ESCIMA
+		JMP fin
+mcima:
+		MOV AL,09	
+		CALL MECIMA
+		JMP fin
+dcima:
+		MOV AL,09	
+		CALL DICIMA
+fin:
+	RET
+CIMAP ENDP
+BAIXOP PROC NEAR
+		PUSH AX
+		MOV AX,POSITION
+		CMP AX,1
+		POP AX
+		JB ebaixo
+		JE mbaixo
+		JA dbaixo
+		jmp fin2		;Caso nenhuma das condições não seja satisfeita repete
+ebaixo:
+		MOV AL,09	
+		CALL ESBAIXO
+		JMP fin2
+mbaixo:
+		MOV AL,09	
+		CALL MEBAIXO
+		JMP fin2
+dbaixo:
+		MOV AL,09	
+		CALL DIBAIXO
+fin2:
+	RET
+BAIXOP ENDP
 LEFT PROC NEAR
 		MOV POSITION,0
-		MOV AL,00			;COR DO BACKGROUND
-		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-		MOV AL,00			;COR DO BACKGROUND
-		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		CALL LIMPAAREA
 		MOV AL,09			;COR 02
 		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 LEFT ENDP
 MIDLE PROC NEAR
 		MOV POSITION,1
-		MOV AL,00			;COR DO BACKGROUND
-		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-		MOV AL,00			;COR DO BACKGROUND
-		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		CALL LIMPAAREA
 		MOV AL,09			;COR DO BACKGROUND
 		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 MIDLE ENDP
 RIGHT PROC NEAR
 		MOV POSITION,2
-		MOV AL,00			;COR DO BACKGROUND
-		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-		MOV AL,00			;COR DO BACKGROUND
-		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+		CALL LIMPAAREA
 		MOV AL,09			;COR 02
 		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
