@@ -21,6 +21,7 @@ MYDATA SEGMENT PARA 'DATA'
         MSG04      		DB      186,' CIMA    : i ',186,'$' 
         MSG05      		DB      186,' BAIXO   : k ',186,'$'
 		MSG06      		DB      186,' Pausa   : p ',186,'$'
+		SCREENS    		DB      186,' P.SCREEN: x ',186,'$'
         MSG07		    DB      204,13 dup(205),185,'$'
         MSG08		    DB      186,' Sair:   Esc ',186,'$' 
         MSG09		    DB      200,13 dup(205),188,'$'
@@ -34,8 +35,9 @@ MYDATA SEGMENT PARA 'DATA'
 		ze				DB '0','$'
 		
 		stringVazia DW  0fffh DUP (' '),'$'
+	
+		TEMP 	DW ?
 MYDATA ENDS
-
 MYCODE SEGMENT PARA 'CODE' 
 MYPROC PROC FAR 
 	ASSUME CS:MYCODE,DS:MYDATA,SS:STACK 
@@ -61,10 +63,7 @@ MYPROC PROC FAR
 		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
 		CALL TABGAME
 		CALL INITMOUSE		;INICIAR O RATO
-		
-		;MOV DX,INITVAG
-		;CALL VAGAOM
-		
+		CALL VAGAO
 		MOV AL,09			;https://en.wikipedia.org/wiki/Enhanced_Graphics_Adapter
 		CALL MPART			;INSERSÃO DA PEÇA DO MEIO
 		
@@ -75,41 +74,346 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 	RET 
 MYPROC ENDP
-VAGAOM PROC NEAR
-		PUSH CX
-		PUSH BX
+MOVVAGAO proc near
+		MOV AL,00
+		call VAGAO			;pinta os pixeis actuais de preto
+		mov AL,56			;cor da peça 'azul bebe'
+		mov dx,INITVAG		;chama a variavel da posicaooriginal
+		ADD dx,10			;avança 10 pixeis para cima
+		mov INITVAG,dx		;guarda na variavel
+		mov dx,FIMVAG		;chama a variavel final
+		ADD dx,10			;avança 10 pixeis para cima
+		mov FIMVAG,dx		;devolve à variavel
+		call VAGAO			;chama o procedimento peca
+	ret
+MOVVAGAO endp
+VAGAO proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repet:
+		mov cx,COMVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repet			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+	ret
+VAGAO endp
+MOVIM PROC NEAR	
+		CALL INFOR
+VOLTA:	
+		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
+		INT 21h				;invoca a interrupção do DOS
+		call MOSTRACHRONO	;chama o cronometro
+		XOR DL,DL
+		MOV TEMP,DX  			;guarda o valor 
+OBTEM_SEGUNDO:  
+		
+		;SE AS CONDIÇÕES NÂO FOREM SATISFEITAS O TECLADO ASSUME AS FUNÇõES DOS MOVIMENTOS
+		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
+		INT 21h				;invoca a interrupção do DOS	
+		mov AH,01 			;VERIFICA O ESTADO DO TECLADO
+		int 16h				;envoca interrupção da bios para o teclado
+		jz tempo			;SE FOR 0 É PORQUE NÃO FOI UTILIZADO E VOLTA A PERGUNTAR
+		mov AH,00H			;LE O VALOR DO TECLADO
+							;@param AL caracter	
+		int 16H				;envoca interrupção da bios para o teclado
+		CMP AL,'j'			;Compara o caracter com a letra 'j'
+		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
+		CMP AL,'k'			;Compara o caracter com a letra 's'
+		JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
+		CMP AL,'l'			;Compara o caracter com a letra 'l'
+		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
+		CMP AL,'i'			;Compara o caracter com a letra 'd'
+		JE cima	
+		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
+		JE finish	
+		JMP TEMPO
+movEsq:
+		MOV AX,POSITION
+		CMP AX,1			;Verifica se já está na esquerda
+		JBE esq				;Se SIM salta para o procedimento de mudar para a esquerda
+		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
+movDir:
+		MOV AX,POSITION
+		CMP AX,1			;Verifica se já está no meio
+		JAE dir				;Se SIM salta para o procedimento de mudar para a direita
+		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
+meio:
+		CALL MIDLE	
+		JMP VOLTA			;vai pedir novo movimento
+esq: 
+		CALL LEFT
+		JMP VOLTA			;vai pedir novo movimento
+dir:
+		CALL RIGHT
+		JMP VOLTA			;vai pedir novo movimento
+cima:
+		call CIMAP
+		JMP VOLTA
+baixo:
+		call BAIXOP
+TEMPO: 
+		MOV BX,TEMP
+		CMP BH,DH 			;compara o 1º tempo com o tempo actual
+		JE OBTEM_SEGUNDO	;se for igual vai recumeçar o relogio	
+		CALL MOVVAGAO
+		MOV AX,3		;ESTADO DO RATO
+		INT 33H			;Interrupção DO RATO
+		AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
+		CMP BX,2		;Verifica o BOTÃO DIREITO
+		JE finish		;CASO ELE SEJA PREMIDO SAI DO PROCEDIMENTO
+		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
+		JBE esq			;MOVE PARA A ESQUERDA
+		CMP CX,240		;SE RATO ESTIVER NA ENTRE OS 61 e 120 PIXEIS
+		JBE meio		;MOVE PARA O MEIO
+		CMP CX,359		;SE RATO ESTIVER NA ENTRE OS 121 e 180 PIXEIS
+		JBE dir			;MOVE PARA A DIREITA
+		JMP VOLTA
+finish:
+		ret	
+MOVIM ENDP
+CIMAP PROC NEAR
 		PUSH AX
-NLINEVAG:
-		MOV BX,cumpVAG;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
-		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
-		MOV INITVAG,DX
-		MOV CX,COMVAG;VAI BUSCAR A MEDIDA DO MEIO
-		CALL rhoriz		;RISCA HORIZONTALMENTE
-		PUSH AX			;GUARDA AX NA PILHA
-		MOV AX,FIMVAG	;VERIFICA SE O VALOR JÁ CHEGOU AO FIM
-		CMP DX,AX
+		MOV AX,POSITION
+		CMP AX,1
 		POP AX
-		JNE NLINEVAG		;SE NÃO REPETE
-		POP AX
-		POP BX
-		POP CX
+		JB ecima
+		JE mcima
+		JA dcima
+		jmp fin			;Caso nenhuma das condições não seja satisfeita SAI
+ecima:
+		CALL LIMPAAREA
+		MOV AL,09		
+		CALL ESCIMA
+		JMP fin
+mcima:
+		CALL LIMPAAREA
+		MOV AL,09	
+		CALL MECIMA
+		JMP fin
+dcima:
+		CALL LIMPAAREA
+		MOV AL,09		
+		CALL DICIMA
+fin:
 	RET
-VAGAOM ENDP
+CIMAP ENDP
+BAIXOP PROC NEAR
+		PUSH AX
+		MOV AX,POSITION
+		CMP AX,1
+		POP AX
+		JB ebaixo
+		JE mbaixo
+		JA dbaixo
+		jmp fin2		;Caso nenhuma das condições não seja satisfeita repete
+ebaixo:
+		CALL LIMPAAREA
+		MOV AL,09	
+		CALL ESBAIXO
+		JMP fin2
+mbaixo:
+		CALL LIMPAAREA
+		MOV AL,09	
+		CALL MEBAIXO
+		JMP fin2
+dbaixo:
+		CALL LIMPAAREA
+		MOV AL,09	
+		CALL DIBAIXO
+fin2:
+	RET
+BAIXOP ENDP
 
-LIMPAAREA PROC NEAR
-		MOV AL,0
-		MOV DX,180;VALOR TOPO DA PEÇA
-NLINE34:
-		MOV BX,140;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
-		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
-		MOV CX,20;VAI BUSCAR A MEDIDA DO MEIO
-		CALL rhoriz		;RISCA HORIZONTALMENTE
-		CMP DX,199
-		JNE NLINE34		;SE NÃO REPETE
+;--------------------------------------------------------------------------
+;Mostra a informação do lado direito do ecrã
+;--------------------------------------------------------------------------
+INFOR PROC NEAR
+	PUSH AX
+	PUSH BX
+	PUSH CX
+	PUSH DX
+	
+	MOV DH,4				;Linha
+	MOV DL,23				;coluna
+	CALL POSICIONAECRA		;posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG00			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,5				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,fraseTempo		;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,6				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,COIN		;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,7				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG01			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,8				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG02			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,9				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG03			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,10				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG04			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,11				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG05			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,12				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG06			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,13				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG07			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,14				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG08			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV DH,15				;Linha
+	MOV DL,23				;Coluna
+	CALL POSICIONAECRA		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG09			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	MOV AH,2Ch				;le o tempo actual
+	INT 21h
+
+	XOR AX,AX				;Garante o ax a "0"
+	MOV AL,60				;Move o número de segundos que dá 1 minuto para AL
+	MUL CL					;Multiplica pelos segundos
+	ADD AL,DH				;Adiciona os segundos
+	MOV temporizador,AX		;salva o tempo no temporizador
+	
+	POP DX
+	POP CX
+	POP BX
+	POP AX
+ RET
+INFOR ENDP
+MOSTRACHRONO PROC NEAR
+		PUSH AX
+		PUSH CX
+		PUSH DX
+
+		MOV AH,2Ch			;Tempo do Sistema
+		INT 21h				;Activa a interrupção
+
+		XOR AX,AX			;garante o AX a "0"
+		MOV AL,60			;carega o valor 60
+		MUL CL				;multiplica o 60 pelo segundo
+		ADD AL,DH			;adiciona os segundos
+		SUB AX,temporizador	;total de segundos
+		
+		MOV DH,5			;linha para o colocar
+		MOV DL,32			;coluna para o colocar
+		CALL POSICIONAECRA
+
+		MOV CX,60			;carrega o numero 60
+		DIV CL 				;divide total corrido seconds by 60
+		PUSH AX 			;salva os minutos e segundos
+		AND AX,00FFh		;limpa os segundos
+		CALL DISPX			;mostra no ecrã os Minutos
+
+		MOV AL,02h			;ativa a função de inserir o caracter
+		MOV DL,':'			;imprime o separador separator
+		INT 21h				;activa interrupção
+
+		POP AX				;restaura os minutos e segundos
+		MOV AL,AH			;prepara os segundos para imprimir no ecrã
+		cmp AL,09h			;compara o valor AL com 09h
+		jbe zer				;se for abaixo salta
+ondeEstavas:		
+		AND AX,00FFh		;limpa os minutos
+		CALL DISPX			;mostra no ecrã os Segundos
+	JMP sairdaqui
+zer:
+		MOV AH,09h			;ativa a função de inserir o caracter
+		LEA DX,ze			;mete um 0 a esquerda nos segundos
+		INT 21h				;activa interrupção
+	JMP ondeEstavas
+sairdaqui:
+		POP DX
+		POP CX
+		POP AX
+		RET
+MOSTRACHRONO ENDP
+POSICIONAECRA PROC NEAR
+		PUSH AX
+		PUSH BX
+		PUSH DX
+		MOV AH,02h			;define o código de interrupção
+		MOV BH,0
+		INT 10h				;interrupção de video
+		MOV AH,02
+		MOV DL,' '
+		INT 21h
+		POP DX
+		MOV AH,02h			;define o código de interrupção
+		MOV BH,0
+		INT 10h				;interrupção de video
+		POP BX
+		POP AX
 	RET
-LIMPAAREA ENDP
+POSICIONAECRA ENDP
 ;--------------------------------------------------------------------------
 ;Procedimento para iniciar o rato
+;ESTAVEL
 ;--------------------------------------------------------------------------
 INITMOUSE PROC NEAR
 		MOV AX,1				;Mostra o cursor
@@ -129,8 +433,46 @@ INITMOUSE PROC NEAR
 		MOV CX,0				;LIMITE MINIMO
 		MOV DX,199				;LIMITE MAXIMO
 		INT 33H
-RET
+	RET
 INITMOUSE ENDP
+;--------------------------------------------------------------------------------------------------
+;------LIMPA AREA DO JOGO---------------------------------------------------------------------------
+;LIMPA A AREA DE JOGO
+;--------------------------------------------------------------------------------------------------
+LIMPAAREA PROC NEAR
+		MOV AL,0
+		MOV DX,180;VALOR TOPO DA PEÇA
+NLINE34:
+		MOV BX,140;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
+		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
+		MOV CX,20;VAI BUSCAR A MEDIDA DO MEIO
+		CALL rhoriz		;RISCA HORIZONTALMENTE
+		CMP DX,199
+		JNE NLINE34		;SE NÃO REPETE
+	RET
+LIMPAAREA ENDP
+;--------------------------------------------------------------------------------------------------
+LEFT PROC NEAR
+		MOV POSITION,0
+		CALL LIMPAAREA
+		MOV AL,09			;COR 02
+		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+LEFT ENDP
+MIDLE PROC NEAR
+		MOV POSITION,1
+		CALL LIMPAAREA
+		MOV AL,09			;COR DO BACKGROUND
+		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+MIDLE ENDP
+RIGHT PROC NEAR
+		MOV POSITION,2
+		CALL LIMPAAREA
+		MOV AL,09			;COR 02
+		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
+	RET
+RIGHT ENDP
 ;--------------------------------------------------------------------------------------
 ;---Boneco do meio
 ;--------------------------------------------------------------------------------------
@@ -329,168 +671,52 @@ NLINE12:
 		POP DX
 	RET
 MECIMA ENDP
-MOVIM PROC NEAR	
-		CALL INFOR
-VOLTA:	
-		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
-		INT 21h				;invoca a interrupção do DOS
-		call MOSTRACHRONO	;chama o cronometro
-		MOV BH,DH  			;guarda o valor 
-OBTEM_SEGUNDO:  
+;------TABULEIRO DO JOGO---------------------------------------------------------------------------
+;ESTAVEL
+;--------------------------------------------------------------------------------------------------
+TABGAME PROC NEAR
+		mov dx,00			;Vertical
+		mov cx,60			;Horizontal
+		mov bx,200			;cumprimento
+		call reta1
 		
-		MOV AX,3		;ESTADO DO RATO
-		INT 33H			;Interrupção DO RATO
-		AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
-		CMP BX,2		;Verifica o BOTÃO DIREITO
-		JE finish		;CASO ELE SEJA PREMIDO SAI DO PROCEDIMENTO
-		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
-		JBE esq			;MOVE PARA A ESQUERDA
-		CMP CX,240		;SE RATO ESTIVER NA ENTRE OS 61 e 120 PIXEIS
-		JBE meio		;MOVE PARA O MEIO
-		CMP CX,359		;SE RATO ESTIVER NA ENTRE OS 121 e 180 PIXEIS
-		JBE dir			;MOVE PARA A DIREITA
-		;SE AS CONDIÇÕES NÂO FOREM SATISFEITAS O TECLADO ASSUME AS FUNÇõES DOS MOVIMENTOS
-		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
-		INT 21h				;invoca a interrupção do DOS	
-		mov AH,01 			;VERIFICA O ESTADO DO TECLADO
-		int 16h				;envoca interrupção da bios para o teclado
-		jz tempo			;SE FOR 0 É PORQUE NÃO FOI UTILIZADO E VOLTA A PERGUNTAR
-		mov AH,00H			;LE O VALOR DO TECLADO
-							;@param AL caracter	
-		int 16H				;envoca interrupção da bios para o teclado
-		CALL LIMPACARECRA	;retira do ecrã o caracter premido
-		CMP AL,'j'			;Compara o caracter com a letra 'j'
-		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
-		CMP AL,'k'			;Compara o caracter com a letra 's'
-		JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
-		CMP AL,'l'			;Compara o caracter com a letra 'l'
-		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
-		CMP AL,'i'			;Compara o caracter com a letra 'd'
-		JE cima	
-		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
-		JE finish	
-TEMPO: 
-		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
-		CALL TABGAME
-		CMP BH,DH 			;compara o 1º tempo com o tempo actual
-		JE OBTEM_SEGUNDO	;se for igual vai recumeçar o relogio
-		JMP VOLTA
-movEsq:
-		MOV AX,POSITION
-		CMP AX,1			;Verifica se já está na esquerda
-		JBE esq				;Se SIM salta para o procedimento de mudar para a esquerda
-		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
-movDir:
-		MOV AX,POSITION
-		CMP AX,1			;Verifica se já está no meio
-		JAE dir				;Se SIM salta para o procedimento de mudar para a direita
-		JNE meio			;CASO CONTRARIO salta para o procedimento de mudar para o meio
-meio:
-		CALL MIDLE
-		JMP VOLTA			;vai pedir novo movimento
-esq: 
-		CALL LEFT
-		JMP VOLTA			;vai pedir novo movimento
-dir:
-		CALL RIGHT
-		JMP VOLTA			;vai pedir novo movimento
-cima:
-		call CIMAP
-		JMP VOLTA
-baixo:
-		call BAIXOP
-		JMP VOLTA
-finish:
-		ret	
-MOVIM ENDP
-CIMAP PROC NEAR
-		PUSH AX
-		MOV AX,POSITION
-		CMP AX,1
-		POP AX
-		JB ecima
-		JE mcima
-		JA dcima
-		jmp fin			;Caso nenhuma das condições não seja satisfeita repete
-ecima:
-		MOV AL,09	
-		CALL ESCIMA
-		JMP fin
-mcima:
-		MOV AL,09	
-		CALL MECIMA
-		JMP fin
-dcima:
-		MOV AL,09	
-		CALL DICIMA
-fin:
+		mov dx,00			;Vertical
+		mov cx,120			;Horizontal
+		mov bx,200			;cumprimento
+		call reta2
+		
+		mov dx,00			;Vertical
+		mov cx,80			;Horizontal
+		mov bx,200			;cumprimento
+		call reta3
+		
+		mov dx,00			;Vertical
+		mov cx,100			;Horizontal
+		mov bx,200			;cumprimento
+		call reta4
+		
+		mov dx,00			;Vertical
+		mov cx,00			;Horizontal
+		mov bx,180			;cumprimento
+		call rhoriz
+		
+		mov dx,00			;Vertical
+		mov cx,00			;Horizontal
+		mov bx,200			;cumprimento
+		call rVertic
+
+		mov dx,200			;Vertical
+		mov cx,0h			;Horizontal
+		mov bx,180			;cumprimento
+		call rhoriz
+
+		mov dx,0			;Vertical
+		mov cx,180			;Horizontal
+		mov bx,200			;cumprimento
+		call rVertic
+		
 	RET
-CIMAP ENDP
-BAIXOP PROC NEAR
-		PUSH AX
-		MOV AX,POSITION
-		CMP AX,1
-		POP AX
-		JB ebaixo
-		JE mbaixo
-		JA dbaixo
-		jmp fin2		;Caso nenhuma das condições não seja satisfeita repete
-ebaixo:
-		MOV AL,09	
-		CALL ESBAIXO
-		JMP fin2
-mbaixo:
-		MOV AL,09	
-		CALL MEBAIXO
-		JMP fin2
-dbaixo:
-		MOV AL,09	
-		CALL DIBAIXO
-fin2:
-	RET
-BAIXOP ENDP
-LEFT PROC NEAR
-		MOV POSITION,0
-		CALL LIMPAAREA
-		MOV AL,09			;COR 02
-		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-	RET
-LEFT ENDP
-MIDLE PROC NEAR
-		MOV POSITION,1
-		CALL LIMPAAREA
-		MOV AL,09			;COR DO BACKGROUND
-		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-	RET
-MIDLE ENDP
-RIGHT PROC NEAR
-		MOV POSITION,2
-		CALL LIMPAAREA
-		MOV AL,09			;COR 02
-		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
-	RET
-RIGHT ENDP
-;--------------------------------------------------------------------------
-;posiciona as uma string vazia para ocultar os caracteres escritos no ecrã ao movimentar as teclas
-;--------------------------------------------------------------------------
-LIMPACARECRA PROC NEAR
-		PUSH AX
-		PUSH BX
-		PUSH DX
-		MOV AH,02h			;Define a posição do ecrã
-		MOV BH,0			;Página 0
-		INT 10h				;Interrupção 10H(Video)
-		MOV AH,09			;Define que irá escrever uma string
-		LEA DX,stringVazia	;insere uma string vazia no lugar do tempo anterior para limpar
-		INT 21h				;Interrupção 10H(DOS)
-		MOV AH,02h			;define o código de interrupção
-		MOV BH,0			;Página 0
-		INT 10h				;Interrupção 10H(Video)
-		POP DX
-		POP BX
-		POP AX
-	RET
-LIMPACARECRA ENDP
+TABGAME ENDP
 ;--------------------------------------------------------------------------
 ;Desenha Reta Vertical
 ; @PARAM AL
@@ -510,6 +736,25 @@ inicio:
 sai:
 	ret						;Termina o procedimento
 rVertic endp 
+;--------------------------------------------------------------------------
+;Desenha Reta Horizontal
+; @PARAM AL
+; @PARAM BX
+; @PARAM CX
+; @PARAM DX
+;--------------------------------------------------------------------------
+rhoriz proc near
+inicio2:
+	cmp bx,00h				;compara se o bx chegou ao valor mínimo
+	je sai2					;se sim sai
+	MOV AH,12				;Escreve o pixel no ecrã
+	INT 10h					;Interrupção 10h(Video)
+	Inc cx					;passa para o proximo pixel Horizontal
+	dec bx					;decrementa o valor da representação o tamanho do comprimento da reta
+	jmp inicio2				;Volta a verificar
+sai2:	
+	ret						;Termina o procedimento
+rhoriz endp 
 ;--------------------------------------------------------------------------
 ;Desenha Reta Vertical
 ; @PARAM AL
@@ -592,210 +837,10 @@ ANGULNEG PROC NEAR
 		Inc dx
 	RET
 ANGULNEG ENDP
-;--------------------------------------------------------------------------
-;Desenha Reta Horizontal
-; @PARAM AL
-; @PARAM BX
-; @PARAM CX
-; @PARAM DX
-;--------------------------------------------------------------------------
-rhoriz proc near
-inicio2:
-	cmp bx,00h				;compara se o bx chegou ao valor mínimo
-	je sai2					;se sim sai
-	MOV AH,12				;Escreve o pixel no ecrã
-	INT 10h					;Interrupção 10h(Video)
-	Inc cx					;passa para o proximo pixel Horizontal
-	dec bx					;decrementa o valor da representação o tamanho do comprimento da reta
-	jmp inicio2				;Volta a verificar
-sai2:	
-	ret						;Termina o procedimento
-rhoriz endp 
-;--------------------------------------------------------------------------------------------------
-;------TABULEIRO DO JOGO---------------------------------------------------------------------------
-;--------------------------------------------------------------------------------------------------
-TABGAME PROC NEAR
-		
-				mov dx,00			;Vertical
-		mov cx,60			;Horizontal
-		mov bx,200			;cumprimento
-		call reta1
-		
-		mov dx,00			;Vertical
-		mov cx,120			;Horizontal
-		mov bx,200			;cumprimento
-		call reta2
-		
-		mov dx,00			;Vertical
-		mov cx,80			;Horizontal
-		mov bx,200			;cumprimento
-		call reta3
-		
-		mov dx,00			;Vertical
-		mov cx,100			;Horizontal
-		mov bx,200			;cumprimento
-		call reta4
-		
-		mov dx,00			;Vertical
-		mov cx,00			;Horizontal
-		mov bx,180			;cumprimento
-		call rhoriz
-		
-		mov dx,00			;Vertical
-		mov cx,00			;Horizontal
-		mov bx,200			;cumprimento
-		call rVertic
-
-		mov dx,200			;Vertical
-		mov cx,0h			;Horizontal
-		mov bx,180			;cumprimento
-		call rhoriz
-
-		mov dx,0			;Vertical
-		mov cx,180			;Horizontal
-		mov bx,200			;cumprimento
-		call rVertic
-		
-	RET
-TABGAME ENDP
-;--------------------------------------------------------------------------
-;Mostra a informação do lado direito do ecrã
-;--------------------------------------------------------------------------
-INFOR PROC NEAR
-	PUSH AX
-	PUSH BX
-	PUSH CX
-	PUSH DX
-	
-	MOV DH,4				;Linha
-	MOV DL,23				;coluna
-	CALL POSICIONAECRA		;posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG00			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,5				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,fraseTempo		;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,6				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,COIN		;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,7				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG01			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,8				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG02			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,9				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG03			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,10				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG04			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,11				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG05			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,12				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG06			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,13				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG07			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,14				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG08			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,15				;Linha
-	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG09			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV AH,2Ch				;le o tempo actual
-	INT 21h
-
-	XOR AX,AX				;Garante o ax a "0"
-	MOV AL,60				;Move o número de segundos que dá 1 minuto para AL
-	MUL CL					;Multiplica pelos segundos
-	ADD AL,DH				;Adiciona os segundos
-	MOV temporizador,AX		;salva o tempo no temporizador
-	
-	POP DX
-	POP CX
-	POP BX
-	POP AX
- RET
-INFOR ENDP
-POSICIONAECRA PROC NEAR
-		PUSH AX
-		PUSH BX
-		PUSH DX
-		MOV AH,02h			;define o código de interrupção
-		MOV BH,0
-		INT 10h				;interrupção de video
-		MOV AH,02
-		MOV DL,' '
-		INT 21h
-		POP DX
-		MOV AH,02h			;define o código de interrupção
-		MOV BH,0
-		INT 10h				;interrupção de video
-		POP BX
-		POP AX
-	RET
-POSICIONAECRA ENDP
+;---------------------------
+;-Converte o código em ASCCI
+;ESTAVEL
+;---------------------------
 DISPX PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -820,53 +865,6 @@ DISPX2:
 		POP DX
 	RET
 DISPX ENDP
-MOSTRACHRONO PROC NEAR
-		PUSH AX
-		PUSH CX
-		PUSH DX
-
-		MOV AH,2Ch			;Tempo do Sistema
-		INT 21h				;Activa a interrupção
-
-		XOR AX,AX			;garante o AX a "0"
-		MOV AL,60			;carega o valor 60
-		MUL CL				;multiplica o 60 pelo segundo
-		ADD AL,DH			;adiciona os segundos
-		SUB AX,temporizador	;total de segundos
-		
-		MOV DH,5			;linha para o colocar
-		MOV DL,32			;coluna para o colocar
-		CALL POSICIONAECRA
-
-		MOV CX,60			;carrega o numero 60
-		DIV CL 				;divide total corrido seconds by 60
-		PUSH AX 			;salva os minutos e segundos
-		AND AX,00FFh		;limpa os segundos
-		CALL DISPX			;mostra no ecrã os Minutos
-
-		MOV AL,02h			;ativa a função de inserir o caracter
-		MOV DL,':'			;imprime o separador separator
-		INT 21h				;activa interrupção
-
-		POP AX				;restaura os minutos e segundos
-		MOV AL,AH			;prepara os segundos para imprimir no ecrã
-		cmp AL,09h			;compara o valor AL com 09h
-		jbe zer				;se for abaixo salta
-ondeEstavas:		
-		AND AX,00FFh		;limpa os minutos
-		CALL DISPX			;mostra no ecrã os Segundos
-	JMP sairdaqui
-zer:
-		MOV AH,09h			;ativa a função de inserir o caracter
-		LEA DX,ze			;mete um 0 a esquerda nos segundos
-		INT 21h				;activa interrupção
-	JMP ondeEstavas
-sairdaqui:
-		POP DX
-		POP CX
-		POP AX
-		RET
-MOSTRACHRONO ENDP
 MYCODE ENDS 
 END
 ;--------------------------------------------------------------------------
