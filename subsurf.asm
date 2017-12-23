@@ -34,9 +34,19 @@ MYDATA SEGMENT PARA 'DATA'
 		temporizador	DW 	0
 		ze				DB '0','$'
 		
-		stringVazia DW  0fffh DUP (' '),'$'
+		stringVazia DW  80h DUP (' '),'$'
 	
 		TEMP 	DW ?
+		
+		TABLE DB 80 DUP (' '),'$' 
+		SCREEN DB 64000 DUP (' '),'$' 
+		;FILE
+		NAMEFLD DB 80 DUP (' '),'$' ; buffer para a pilha 
+		FILENAM	DB '.\coord.dat',0
+		scres	DB '.\screen.pgm',0
+		FHAND	DW ?
+		;FILE MSG ERRORS
+		BADOPENF DB 'BAD OPENFILE','$'
 MYDATA ENDS
 MYCODE SEGMENT PARA 'CODE' 
 MYPROC PROC FAR 
@@ -46,6 +56,8 @@ MYPROC PROC FAR
 	PUSH AX 
 	MOV AX,MYDATA ; coloca em AX a posicao dos DADOS 
 	MOV DS,AX ; coloca essa posicao no reg. DS 
+	
+		
 		MOV	AH,00h			;Modo de Video
 		MOV AL,0Dh			;Grafico 320x200
 		INT 10h				;Interrupção 10H(Video)
@@ -59,6 +71,7 @@ MYPROC PROC FAR
 		MOV BH,01			;Palete de cores
 		MOV BL,00			;Cores Primárias
 		INT 10h				;serviços de video e ecrã
+		
 		call infor
 		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
 		CALL TABGAME
@@ -74,6 +87,103 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 	RET 
 MYPROC ENDP
+;SCREENSHOT INSTÁVEL
+READSCREEN PROC NEAR
+		PUSH DI
+		PUSH DX
+		PUSH CX
+		MOV AX,320
+		MOV BX,200
+		XOR DX,DX
+VERTIC:			
+		XOR CX,CX
+HORIZ:
+		PUSH AX
+		PUSH BX
+		MOV AH,0DH
+		MOV BH,00
+		INT 10H
+		LEA DI,SCREEN
+		MOV [DI],AL
+		INC DI
+		POP AX
+		POP BX
+		INC CX
+		
+		CMP CX,AX
+		JNE HORIZ
+		INC DX
+
+		CMP DX,BX
+		JNE VERTIC
+		POP CX
+		POP DX
+		POP DI
+	RET
+READSCREEN ENDP
+;SCREENSHOT INSTÁVEL
+SCREENSHOT PROC NEAR
+	MOV AL,01
+	CALL OPENFILE
+	CALL READSCREEN
+	mov AH,40h
+	mov BX,FHAND
+	MOV CX,64000
+	LEA DX,SCREEN
+	INT 21H
+	CALL CLOSEFILE
+	RET
+SCREENSHOT ENDP
+;@param al - 0 r 1 w 2 rw
+OPENFILE PROC NEAR
+	PUSH DX
+	MOV AH,3DH
+	LEA DX,scres
+	INT 21H
+	jc BadOpen
+	mov FHAND, ax ;Save file handle
+BadOpen:
+	POP DX
+	RET
+OPENFILE ENDP
+READFILE PROC NEAR
+		PUSH SI
+		mov al, 0 ;Open for reading
+		CALL OPENFILE
+		LEA SI,TABLE
+LP: 
+		mov ah,3fh ;Read data from the file
+		lea dx, NAMEFLD ;Address of data buffer
+		mov cx, 1 ;Read one byte
+		mov bx, FHAND ;Get file handle value
+		int 21h
+		jc ReadError
+		cmp ax, cx ;EOF reached?
+		jne EOF
+		mov al, NAMEFLD ;Get character read
+		MOV [SI],AL
+		INC SI
+		;MOV AH,02
+		;MOV DL,AL
+		;INT 21H
+		jmp LP ;Read next byte
+EOF: 	
+		LEA DX,TABLE
+		MOV AH,09H
+		INT 21H
+		CALL CLOSEFILE
+ReadError:
+	POP SI
+	RET
+READFILE ENDP
+CLOSEFILE PROC NEAR
+		mov bx, FHAND
+		mov ah, 3eh ;Close file
+		int 21h
+		jc CloseError
+CloseError:
+	RET
+CLOSEFILE ENDP
 MOVVAGAO proc near
 		MOV AL,00
 		call VAGAO			;pinta os pixeis actuais de preto
@@ -87,6 +197,7 @@ MOVVAGAO proc near
 		call VAGAO			;chama o procedimento peca
 	ret
 MOVVAGAO endp
+
 VAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repet:
@@ -102,22 +213,17 @@ VAGAO endp
 MOVIM PROC NEAR	
 		CALL INFOR
 VOLTA:	
-		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
-		INT 21h				;invoca a interrupção do DOS
+		CALL DOSTIME
 		call MOSTRACHRONO	;chama o cronometro
 		XOR DL,DL
 		MOV TEMP,DX  			;guarda o valor 
 OBTEM_SEGUNDO:  
-		
 		;SE AS CONDIÇÕES NÂO FOREM SATISFEITAS O TECLADO ASSUME AS FUNÇõES DOS MOVIMENTOS
-		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
-		INT 21h				;invoca a interrupção do DOS	
+		CALL DOSTIME	
 		mov AH,01 			;VERIFICA O ESTADO DO TECLADO
 		int 16h				;envoca interrupção da bios para o teclado
 		jz tempo			;SE FOR 0 É PORQUE NÃO FOI UTILIZADO E VOLTA A PERGUNTAR
-		mov AH,00H			;LE O VALOR DO TECLADO
-							;@param AL caracter	
-		int 16H				;envoca interrupção da bios para o teclado
+		CALL READKEYBORD
 		CMP AL,'j'			;Compara o caracter com a letra 'j'
 		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
 		CMP AL,'k'			;Compara o caracter com a letra 's'
@@ -126,8 +232,18 @@ OBTEM_SEGUNDO:
 		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
 		CMP AL,'i'			;Compara o caracter com a letra 'd'
 		JE cima	
+		CMP AL,'p'			;Compara o caracter com a letra 'd'
+		JE pausa	
+		CMP AL,'x'			;Compara o caracter com a letra 'd'
+		JE scrsht	
 		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
 		JE finish	
+		JMP TEMPO
+scrsht:
+		CALL SCREENSHOT
+		JMP TEMPO
+pausa:
+		CALL READKEYBORD
 		JMP TEMPO
 movEsq:
 		MOV AX,POSITION
@@ -158,11 +274,7 @@ TEMPO:
 		CMP BH,DH 			;compara o 1º tempo com o tempo actual
 		JE OBTEM_SEGUNDO	;se for igual vai recumeçar o relogio	
 		CALL MOVVAGAO
-		MOV AX,3		;ESTADO DO RATO
-		INT 33H			;Interrupção DO RATO
-		AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
-		CMP BX,2		;Verifica o BOTÃO DIREITO
-		JE finish		;CASO ELE SEJA PREMIDO SAI DO PROCEDIMENTO
+		CALL MOUSE
 		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
 		JBE esq			;MOVE PARA A ESQUERDA
 		CMP CX,240		;SE RATO ESTIVER NA ENTRE OS 61 e 120 PIXEIS
@@ -173,6 +285,49 @@ TEMPO:
 finish:
 		ret	
 MOVIM ENDP
+;------------------------
+;TIME
+;@RETURN BX - BUTTONS
+;@RETURN CX - HORIZONTAL COORD
+;@RETURN DX - VERTICAL COORD
+;------------------------
+MOUSE PROC NEAR
+	MOV AX,3		;ESTADO DO RATO
+	INT 33H			;Interrupção DO RATO
+	AND BX,07		;METE OS DIGITOS MAIS SIGNIFICATIVOS A 0 (001 010 100) 7(111)
+RET
+MOUSE ENDP
+;------------------------
+;TIME
+;@RETURN CH - HOURS
+;@RETURN CL - MINUTS
+;@RETURN DH - SECONDS
+;@RETURN DL - CENTSECONDS
+;------------------------
+DOSTIME PROC NEAR
+		PUSH AX
+		PUSH BX
+		MOV	AH,2Ch  		;OBTEM o TEMPO DO DOS
+		INT 21h				;invoca a interrupção do DOS	
+		POP BX
+		POP AX
+	RET
+DOSTIME ENDP
+;------------------------
+;READ KEYBORD
+;@RETURN AL - key pressed
+;------------------------
+READKEYBORD PROC NEAR
+		PUSH BX
+		PUSH CX
+		PUSH DX
+		mov AH,00H			;LE O VALOR DO TECLADO
+		int 16H		
+		POP DX
+		POP CX
+		POP BX
+	RET
+READKEYBORD ENDP
 CIMAP PROC NEAR
 		PUSH AX
 		MOV AX,POSITION
@@ -237,7 +392,7 @@ INFOR PROC NEAR
 	
 	MOV DH,4				;Linha
 	MOV DL,23				;coluna
-	CALL POSICIONAECRA		;posicionamento
+	CALL DEFINEPOINT		;posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG00			;Mensagem a ser escrita
@@ -245,7 +400,7 @@ INFOR PROC NEAR
 	
 	MOV DH,5				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,fraseTempo		;Mensagem a ser escrita
@@ -253,7 +408,7 @@ INFOR PROC NEAR
 	
 	MOV DH,6				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,COIN		;Mensagem a ser escrita
@@ -261,7 +416,7 @@ INFOR PROC NEAR
 	
 	MOV DH,7				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG01			;Mensagem a ser escrita
@@ -269,7 +424,7 @@ INFOR PROC NEAR
 	
 	MOV DH,8				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG02			;Mensagem a ser escrita
@@ -277,7 +432,7 @@ INFOR PROC NEAR
 	
 	MOV DH,9				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG03			;Mensagem a ser escrita
@@ -285,7 +440,7 @@ INFOR PROC NEAR
 	
 	MOV DH,10				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG04			;Mensagem a ser escrita
@@ -293,7 +448,7 @@ INFOR PROC NEAR
 	
 	MOV DH,11				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG05			;Mensagem a ser escrita
@@ -301,7 +456,7 @@ INFOR PROC NEAR
 	
 	MOV DH,12				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG06			;Mensagem a ser escrita
@@ -309,7 +464,7 @@ INFOR PROC NEAR
 	
 	MOV DH,13				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG07			;Mensagem a ser escrita
@@ -317,7 +472,7 @@ INFOR PROC NEAR
 	
 	MOV DH,14				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG08			;Mensagem a ser escrita
@@ -325,14 +480,13 @@ INFOR PROC NEAR
 	
 	MOV DH,15				;Linha
 	MOV DL,23				;Coluna
-	CALL POSICIONAECRA		;Posicionamento
+	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG09			;Mensagem a ser escrita
 	INT 21H					;Activa a função
 	
-	MOV AH,2Ch				;le o tempo actual
-	INT 21h
+	CALL DOSTIME
 
 	XOR AX,AX				;Garante o ax a "0"
 	MOV AL,60				;Move o número de segundos que dá 1 minuto para AL
@@ -351,8 +505,7 @@ MOSTRACHRONO PROC NEAR
 		PUSH CX
 		PUSH DX
 
-		MOV AH,2Ch			;Tempo do Sistema
-		INT 21h				;Activa a interrupção
+		CALL DOSTIME
 
 		XOR AX,AX			;garante o AX a "0"
 		MOV AL,60			;carega o valor 60
@@ -393,20 +546,24 @@ sairdaqui:
 		POP AX
 		RET
 MOSTRACHRONO ENDP
+;Define o ponto no ecrã e apara o caracter potencialmente ecrito
+DEFINEPOINT PROC NEAR
+		MOV AH,02h			;define o código de interrupção
+		MOV BH,0
+		INT 10h				;interrupção de video
+	RET
+DEFINEPOINT ENDP
+;Define o ponto no ecrã e apara o caracter potencialmente ecrito
 POSICIONAECRA PROC NEAR
 		PUSH AX
 		PUSH BX
 		PUSH DX
-		MOV AH,02h			;define o código de interrupção
-		MOV BH,0
-		INT 10h				;interrupção de video
+		CALL DEFINEPOINT
 		MOV AH,02
 		MOV DL,' '
 		INT 21h
 		POP DX
-		MOV AH,02h			;define o código de interrupção
-		MOV BH,0
-		INT 10h				;interrupção de video
+		CALL DEFINEPOINT
 		POP BX
 		POP AX
 	RET
@@ -452,6 +609,7 @@ NLINE34:
 	RET
 LIMPAAREA ENDP
 ;--------------------------------------------------------------------------------------------------
+;Pede Para desenhae a peça no lado esquerdo
 LEFT PROC NEAR
 		MOV POSITION,0
 		CALL LIMPAAREA
@@ -459,6 +617,7 @@ LEFT PROC NEAR
 		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 LEFT ENDP
+;Pede Para desenhae a peça no meio
 MIDLE PROC NEAR
 		MOV POSITION,1
 		CALL LIMPAAREA
@@ -466,6 +625,7 @@ MIDLE PROC NEAR
 		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 MIDLE ENDP
+;Pede Para desenhae a peça no lado direito
 RIGHT PROC NEAR
 		MOV POSITION,2
 		CALL LIMPAAREA
@@ -479,8 +639,7 @@ RIGHT ENDP
 MPART PROC NEAR
 		PUSH DX
 		PUSH AX
-		MOV AX,3		;ESTADO DO RATO
-		INT 33H			;Interrupção DO RATO	
+		CALL MOUSE
 		CMP CX,359
 		JAE TRES2
 		CMP DX,100
@@ -501,8 +660,7 @@ MPART ENDP
 EPART PROC NEAR
 		PUSH DX
 		PUSH AX
-		MOV AX,3		;ESTADO DO RATO
-		INT 33H			;Interrupção DO RATO
+		CALL MOUSE
 		CMP CX,359
 		JAE TRES1
 		CMP DX,100
@@ -523,8 +681,7 @@ EPART ENDP
 DPART PROC NEAR
 		PUSH DX
 		PUSH AX
-		MOV AX,3		;ESTADO DO RATO
-		INT 33H			;Interrupção DO RATO
+		CALL MOUSE
 		CMP CX,359
 		JAE TRES
 		CMP DX,100
@@ -539,6 +696,7 @@ FINA3:
 		POP DX
 	RET
 DPART ENDP
+;Desenha a peça na ESQUERDA em BAIXO
 ESBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -561,6 +719,7 @@ NLINE2:
 		POP DX
 	RET
 ESBAIXO ENDP
+;Desenha a peça no MEIO em BAIXO
 MEBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -583,6 +742,7 @@ NLINE1:
 		POP DX
 	RET
 MEBAIXO ENDP
+;Desenha a peça na DIREITA em BAIXO
 DIBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -605,6 +765,7 @@ NLINE3:
 		POP DX
 	RET
 DIBAIXO ENDP
+;Desenha a peça na DIREITA em cima
 DICIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -627,6 +788,7 @@ NLINE32:
 		POP DX
 	RET
 DICIMA ENDP
+;Desenha a peça na ESQUERDA em cima
 ESCIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -649,6 +811,7 @@ NLINE22:
 		POP DX
 	RET
 ESCIMA ENDP
+;Desenha a peça no meio em cima
 MECIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -672,6 +835,7 @@ NLINE12:
 	RET
 MECIMA ENDP
 ;------TABULEIRO DO JOGO---------------------------------------------------------------------------
+;FUNÇÃO PARA DESENHAR O TABULEIRO DO JOGO
 ;ESTAVEL
 ;--------------------------------------------------------------------------------------------------
 TABGAME PROC NEAR
@@ -719,10 +883,10 @@ TABGAME PROC NEAR
 TABGAME ENDP
 ;--------------------------------------------------------------------------
 ;Desenha Reta Vertical
-; @PARAM AL
-; @PARAM BX
-; @PARAM CX
-; @PARAM DX
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
 ;--------------------------------------------------------------------------
 rVertic proc near
 inicio:
@@ -738,10 +902,10 @@ sai:
 rVertic endp 
 ;--------------------------------------------------------------------------
 ;Desenha Reta Horizontal
-; @PARAM AL
-; @PARAM BX
-; @PARAM CX
-; @PARAM DX
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
 ;--------------------------------------------------------------------------
 rhoriz proc near
 inicio2:
@@ -756,11 +920,11 @@ sai2:
 	ret						;Termina o procedimento
 rhoriz endp 
 ;--------------------------------------------------------------------------
-;Desenha Reta Vertical
-; @PARAM AL
-; @PARAM BX
-; @PARAM CX
-; @PARAM DX
+;Desenha Reta ANGULAR 1
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
 ;--------------------------------------------------------------------------
 reta1 proc near
 inicio3:
@@ -776,7 +940,13 @@ inicio3:
 sai3:
 	ret						;Termina o procedimento
 reta1 endp 
-
+;--------------------------------------------------------------------------
+;Desenha Reta ANGULAR 2
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
+;--------------------------------------------------------------------------
 reta2 proc near
 inicio4:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
@@ -791,11 +961,18 @@ inicio4:
 sai4:
 	ret						;Termina o procedimento
 reta2 endp 
+;--------------------------------------------------------------------------
+;Desenha Reta ANGULAR 3
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
+;--------------------------------------------------------------------------
 reta3 proc near
 inicio5:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
 	je sai5					;se sim sai
-	CALL ANGULNEG
+	CALL ANGULNEG ;ABRE o ANGULO
 	CALL ANGULNEG
 	CALL ANGULNEG
 	CALL ANGULNEG
@@ -811,6 +988,13 @@ inicio5:
 sai5:
 	ret						;Termina o procedimento
 reta3 endp 
+;--------------------------------------------------------------------------
+;Desenha Reta ANGULAR 4
+; @PARAM AL - COR
+; @PARAM BX - CUMPRIMENTO
+; @PARAM CX - PONTO INICIAL HORIZONTAL
+; @PARAM DX - PONTO INICIAL VERTICAL
+;--------------------------------------------------------------------------
 reta4 proc near
 inicio6:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
