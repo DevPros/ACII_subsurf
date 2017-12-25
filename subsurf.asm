@@ -12,6 +12,11 @@ MYDATA SEGMENT PARA 'DATA'
 		LIMPARTC	DW	189
 		cump		DW  20
 		
+		POSARRAY1   DW 00H
+		POSARRAY2   DW 01H
+		POSARRAY3   DW 02H
+		POSARRAY4   DW 03H
+		
 		MSG00			DB      201,13 dup(205),187 ,'$'
         fraseTempo      DB      186,' TEMPO:      ',186,'$'
 		COIN		    DB      186,' COINS:      ',186,'$'
@@ -26,18 +31,35 @@ MYDATA SEGMENT PARA 'DATA'
         MSG08		    DB      186,' Sair:   Esc ',186,'$' 
         MSG09		    DB      200,13 dup(205),188,'$'
 		
-		INITVAG 	DW	00
+		INITVAG 	DW	01
 		FIMVAG		DW	30
 		COMVAG		DW  85
+		COEVAG		DW  60
+		CODVAG		DW  110
 		cumpVAG		DW  10
 		
 		temporizador	DW 	0
 		ze				DB '0','$'
 		
 		stringVazia DW  80h DUP (' '),'$'
-	
+		TST DB ?
 		TEMP 	DW ?
-		
+		TESTVALUE 	DB 01,00,00,030
+					DB 00,00,01,030
+					DB 01,01,00,030
+					DB 01,01,00,030
+					DB 00,01,00,030
+					DB 01,00,00,030
+					DB 00,00,01,030
+					DB 00,01,00,030
+					DB 00,00,01,030
+					DB 01,01,00,030
+					DB 01,01,00,030
+					DB 00,01,00,030
+					DB 00,00,01,030
+					DB 01,01,00,030
+					DB 01,01,00,030
+					DB 00,01,00,030
 		TABLE DB 80 DUP (' '),'$' 
 		SCREEN DB 64000 DUP (' '),'$' 
 		;FILE
@@ -56,7 +78,11 @@ MYPROC PROC FAR
 	PUSH AX 
 	MOV AX,MYDATA ; coloca em AX a posicao dos DADOS 
 	MOV DS,AX ; coloca essa posicao no reg. DS 
-	
+		
+		;CALL READFILE
+		;CALL CONTROLER
+		;MOV AH,01
+		;Int 21h
 		
 		MOV	AH,00h			;Modo de Video
 		MOV AL,0Dh			;Grafico 320x200
@@ -76,7 +102,6 @@ MYPROC PROC FAR
 		MOV AL,15			;COR DAS FRONTEIRAS DO TABULEIRO DO JOGO
 		CALL TABGAME
 		CALL INITMOUSE		;INICIAR O RATO
-		CALL VAGAO
 		MOV AL,09			;https://en.wikipedia.org/wiki/Enhanced_Graphics_Adapter
 		CALL MPART			;INSERSÃO DA PEÇA DO MEIO
 		
@@ -87,11 +112,55 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 	RET 
 MYPROC ENDP
+CONTROLER PROC NEAR
+		PUSH CX
+		PUSH BX
+		PUSH DX
+		PUSH AX
+		PUSH SI
+		mov AL,00
+		CALL EVAGAO
+		mov AL,00
+		CALL MVAGAO
+		mov AL,00
+		CALL DVAGAO
+		CALL MOVVAGAO
+		MOV SI,POSARRAY1
+		CMP TESTVALUE[SI],01
+		JE ESQVAG
+FESQ:
+		MOV SI,POSARRAY2
+		CMP TESTVALUE[SI],01
+		JE MEIVAG
+FMEI:
+		MOV SI,POSARRAY3
+		CMP TESTVALUE[SI],01
+		JE DIRVAG
+		JMP fnl
+ESQVAG:
+		mov AL,09
+		CALL EVAGAO
+		JMP FESQ
+MEIVAG:
+		mov AL,09
+		CALL MVAGAO
+		JMP FMEI
+DIRVAG:	
+		mov AL,09
+		CALL DVAGAO
+FNL:
+		POP SI
+		POP AX
+		POP DX
+		POP BX
+		POP CX
+	RET
+CONTROLER ENDP
 ;SCREENSHOT INSTÁVEL
 READSCREEN PROC NEAR
 		PUSH DI
 		PUSH DX
-		PUSH CX
+		PUSH CX;Guarda o valor na pilha
 		LEA DI,SCREEN
 		MOV AX,320
 		MOV BX,200
@@ -117,40 +186,43 @@ HORIZ:
 
 		CMP DX,BX
 		JNE VERTIC
-		POP CX
+		POP CX;tira o valor na pilha
 		POP DX
 		POP DI
 	RET
 READSCREEN ENDP
 ;SCREENSHOT INSTÁVEL
 SCREENSHOT PROC NEAR
+	MOV AH,3DH
 	MOV AL,01
-	CALL OPENFILE
+	LEA DX,scres
+	INT 21H
+	jc BadOpen1
+	mov FHAND, ax ;Save file handle
 	CALL READSCREEN
 	mov AH,40h
 	mov BX,FHAND
 	MOV CX,64000
 	LEA DX,SCREEN
 	INT 21H
-	CALL CLOSEFILE
+	mov bx, FHAND
+	mov ah, 3eh ;Close file
+	int 21h
+	jc CloseError1
+CloseError1:
+	JMP BADOPEN1
+BadOpen1:
 	RET
 SCREENSHOT ENDP
-;@param al - 0 r 1 w 2 rw
-OPENFILE PROC NEAR
-	PUSH DX
-	MOV AH,3DH
-	LEA DX,scres
-	INT 21H
-	jc BadOpen
-	mov FHAND, ax ;Save file handle
-BadOpen:
-	POP DX
-	RET
-OPENFILE ENDP
+
 READFILE PROC NEAR
 		PUSH SI
-		mov al, 0 ;Open for reading
-		CALL OPENFILE
+		MOV AH,3DH
+		MOV AL,00
+		LEA DX,FILENAM
+		INT 21H
+		jc BadOpen
+		mov FHAND, ax ;Save file handle
 		LEA SI,TABLE
 LP: 
 		mov ah,3fh ;Read data from the file
@@ -164,53 +236,94 @@ LP:
 		mov al, NAMEFLD ;Get character read
 		MOV [SI],AL
 		INC SI
-		;MOV AH,02
-		;MOV DL,AL
-		;INT 21H
 		jmp LP ;Read next byte
 EOF: 	
 		LEA DX,TABLE
-		MOV AH,09H
+		MOV AH,09
 		INT 21H
-		CALL CLOSEFILE
-ReadError:
-	POP SI
-	RET
-READFILE ENDP
-CLOSEFILE PROC NEAR
 		mov bx, FHAND
 		mov ah, 3eh ;Close file
 		int 21h
 		jc CloseError
 CloseError:
+		JMP BadOpen
+ReadError:
+		JMP BadOpen
+BadOpen:
+		POP SI
 	RET
-CLOSEFILE ENDP
+READFILE ENDP
+
 MOVVAGAO proc near
-		MOV AL,00
-		call VAGAO			;pinta os pixeis actuais de preto
-		mov AL,56			;cor da peça 'azul bebe'
-		mov dx,INITVAG		;chama a variavel da posicaooriginal
-		ADD dx,10			;avança 10 pixeis para cima
-		mov INITVAG,dx		;guarda na variavel
+		mov dx,FIMVAG		;chama a variavel final
+		CMP DX,199
+		JAE RESET
+VLT:		
 		mov dx,FIMVAG		;chama a variavel final
 		ADD dx,10			;avança 10 pixeis para cima
 		mov FIMVAG,dx		;devolve à variavel
-		call VAGAO			;chama o procedimento peca
+		mov dx,INITVAG		;chama a variavel da posicaooriginal
+		ADD dx,10			;avança 10 pixeis para cima
+		mov INITVAG,dx		;guarda na variavel
+		JMP FI
+RESET:
+	PUSH DX
+	MOV INITVAG,01H
+	MOV FIMVAG,30H
+	MOV DX,POSARRAY1
+	ADD DX,04H
+	MOV POSARRAY1,DX
+	MOV DX,POSARRAY2
+	ADD DX,04H
+	MOV POSARRAY2,DX
+	MOV DX,POSARRAY3
+	ADD DX,04H
+	MOV POSARRAY3,DX
+	MOV DX,POSARRAY4
+	ADD DX,04H
+	MOV POSARRAY4,DX
+	POP DX
+	JMP VLT
+FI:	
 	ret
 MOVVAGAO endp
 
-VAGAO proc near
+MVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
-repet:
+repetM:
 		mov cx,COMVAG		;chama a variavel
 		mov bx,cumpVAG		;cumprimento do quadrado
 		call rhoriz			;chama procedimento que avança a linha vertical
 		inc dx				;incrementa para a proxima linha
 		cmp dx,FIMVAG		;compara com posição final
-		jbe repet			;se ele for um valor abaixo ou igual continua incremenar linhas
+		jbe repetM			;se ele for um valor abaixo ou igual continua incremenar linhas
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
-VAGAO endp
+MVAGAO endp
+EVAGAO proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repete:
+		mov cx,COEVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repete			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+	ret
+EVAGAO endp
+DVAGAO proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repetd:
+		mov cx,CODVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repetd			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+	ret
+DVAGAO endp
 MOVIM PROC NEAR	
 		CALL INFOR
 VOLTA:	
@@ -274,7 +387,9 @@ TEMPO:
 		MOV BX,TEMP
 		CMP BH,DH 			;compara o 1º tempo com o tempo actual
 		JE OBTEM_SEGUNDO	;se for igual vai recumeçar o relogio	
-		CALL MOVVAGAO
+		
+		
+		CALL CONTROLER
 		CALL MOUSE
 		CMP CX,120		;SE RATO ESTIVER NA ENTRE OS 0 e 60 PIXEIS
 		JBE esq			;MOVE PARA A ESQUERDA
@@ -468,7 +583,7 @@ INFOR PROC NEAR
 	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG07			;Mensagem a ser escrita
+	LEA	DX,SCREENS			;Mensagem a ser escrita
 	INT 21H					;Activa a função
 	
 	MOV DH,14				;Linha
@@ -476,10 +591,20 @@ INFOR PROC NEAR
 	CALL DEFINEPOINT		;Posicionamento
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
+	LEA	DX,MSG07			;Mensagem a ser escrita
+	INT 21H					;Activa a função
+	
+	
+	
+	MOV DH,15				;Linha
+	MOV DL,23				;Coluna
+	CALL DEFINEPOINT		;Posicionamento
+	
+	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG08			;Mensagem a ser escrita
 	INT 21H					;Activa a função
 	
-	MOV DH,15				;Linha
+	MOV DH,16				;Linha
 	MOV DL,23				;Coluna
 	CALL DEFINEPOINT		;Posicionamento
 	
@@ -842,22 +967,22 @@ MECIMA ENDP
 TABGAME PROC NEAR
 		mov dx,00			;Vertical
 		mov cx,60			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call reta1
 		
 		mov dx,00			;Vertical
 		mov cx,120			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call reta2
 		
 		mov dx,00			;Vertical
 		mov cx,80			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call reta3
 		
 		mov dx,00			;Vertical
 		mov cx,100			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call reta4
 		
 		mov dx,00			;Vertical
@@ -867,17 +992,17 @@ TABGAME PROC NEAR
 		
 		mov dx,00			;Vertical
 		mov cx,00			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call rVertic
 
-		mov dx,200			;Vertical
+		mov dx,199			;Vertical
 		mov cx,0h			;Horizontal
 		mov bx,180			;cumprimento
 		call rhoriz
 
 		mov dx,0			;Vertical
 		mov cx,180			;Horizontal
-		mov bx,200			;cumprimento
+		mov bx,199			;cumprimento
 		call rVertic
 		
 	RET
