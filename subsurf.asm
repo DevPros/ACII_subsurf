@@ -32,7 +32,7 @@ MYDATA SEGMENT PARA 'DATA'
         MSG09		    DB      200,13 dup(205),188,'$'
 		
 		INITVAG 	DW	01
-		FIMVAG		DW	30
+		FIMVAG		DW	?
 		COMVAG		DW  85
 		COEVAG		DW  60
 		CODVAG		DW  110
@@ -44,17 +44,17 @@ MYDATA SEGMENT PARA 'DATA'
 		stringVazia DW  80h DUP (' '),'$'
 		TST DB ?
 		TEMP 	DW ?
-		TESTVALUE 	DB 01,00,00,030
-					DB 00,00,01,030
-					DB 01,01,00,030
-					DB 01,01,00,030
-					DB 00,01,00,030
-					DB 01,00,00,030
-					DB 00,00,01,030
-					DB 00,01,00,030
-					DB 00,00,01,030
-					DB 01,01,00,030
-					DB 01,01,00,030
+		TESTVALUE 	DB 01,02,00,020
+					DB 02,00,01,050
+					DB 01,01,02,040
+					DB 01,01,02,010
+					DB 02,01,00,050
+					DB 01,02,00,060
+					DB 00,00,01,070
+					DB 00,01,00,010
+					DB 00,00,01,090
+					DB 01,01,00,020
+					DB 01,01,00,070
 					DB 00,01,00,030
 					DB 00,00,01,030
 					DB 01,01,00,030
@@ -78,7 +78,7 @@ MYPROC PROC FAR
 	PUSH AX 
 	MOV AX,MYDATA ; coloca em AX a posicao dos DADOS 
 	MOV DS,AX ; coloca essa posicao no reg. DS 
-		
+		CALL STARTVAR;
 		;CALL READFILE
 		;CALL CONTROLER
 		;MOV AH,01
@@ -112,6 +112,13 @@ MYPROC PROC FAR
 		INT 10h				;Interrupção 10H(Video)
 	RET 
 MYPROC ENDP
+STARTVAR PROC NEAR
+		MOV SI,POSARRAY4
+		MOV AL,TESTVALUE[SI]
+		CBW
+		MOV FIMVAG,AX
+	RET
+STARTVAR ENDP
 CONTROLER PROC NEAR
 		PUSH CX
 		PUSH BX
@@ -128,19 +135,30 @@ CONTROLER PROC NEAR
 		MOV SI,POSARRAY1
 		CMP TESTVALUE[SI],01
 		JE ESQVAG
+		JA ESQCOIN
+		
 FESQ:
 		MOV SI,POSARRAY2
 		CMP TESTVALUE[SI],01
 		JE MEIVAG
+		JA MECOIN
 FMEI:
 		MOV SI,POSARRAY3
 		CMP TESTVALUE[SI],01
 		JE DIRVAG
+		JA DIRCOIN
 		JMP fnl
 ESQVAG:
 		mov AL,09
 		CALL EVAGAO
 		JMP FESQ
+ESQCOIN:
+		mov AL,09
+		CALL ECOIN
+		JMP FESQ
+MECOIN:
+		CALL MCOIN
+		JMP FMEI
 MEIVAG:
 		mov AL,09
 		CALL MVAGAO
@@ -148,6 +166,10 @@ MEIVAG:
 DIRVAG:	
 		mov AL,09
 		CALL DVAGAO
+		JMP FNL
+DIRCOIN:
+		mov AL,09
+		CALL DCOIN
 FNL:
 		POP SI
 		POP AX
@@ -162,8 +184,8 @@ READSCREEN PROC NEAR
 		PUSH DX
 		PUSH CX;Guarda o valor na pilha
 		LEA DI,SCREEN
-		MOV AX,320
-		MOV BX,200
+		MOV AX,320;resolução Horizontal
+		MOV BX,200;resolução VERTICAL
 		XOR DX,DX
 VERTIC:			
 		XOR CX,CX
@@ -255,7 +277,7 @@ BadOpen:
 READFILE ENDP
 
 MOVVAGAO proc near
-		mov dx,FIMVAG		;chama a variavel final
+		mov dx,INITVAG		;chama a variavel final
 		CMP DX,199
 		JAE RESET
 VLT:		
@@ -268,20 +290,24 @@ VLT:
 		JMP FI
 RESET:
 	PUSH DX
-	MOV INITVAG,01H
-	MOV FIMVAG,30H
+	
 	MOV DX,POSARRAY1
 	ADD DX,04H
-	MOV POSARRAY1,DX
+	MOV POSARRAY1,DX	;ALTERAR A POSIÇÃO DO 1.º VAGÃO
 	MOV DX,POSARRAY2
 	ADD DX,04H
-	MOV POSARRAY2,DX
+	MOV POSARRAY2,DX	;ALTERAR A POSIÇÃO DO 2.º VAGÃO
 	MOV DX,POSARRAY3
 	ADD DX,04H
-	MOV POSARRAY3,DX
+	MOV POSARRAY3,DX	;ALTERAR A POSIÇÃO DO 3.º VAGÃO
 	MOV DX,POSARRAY4
 	ADD DX,04H
-	MOV POSARRAY4,DX
+	MOV POSARRAY4,DX	;ALTERAR A POSIÇÃO DO CUMPRIMENTO
+	MOV SI,POSARRAY4
+	MOV DL,TESTVALUE[SI]
+	CBW
+	MOV INITVAG,01H		;REPOR O VALOR DO VAGÃO DE ORIGEM
+	MOV FIMVAG,DX 		;Definir o limite do VAGÃO DE ORIGEM
 	POP DX
 	JMP VLT
 FI:	
@@ -300,6 +326,54 @@ repetM:
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
 MVAGAO endp
+MCOIN proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repetCM:
+		mov cx,COMVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,02
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repetCM			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+		ADD dx,5H
+		mov bx,cumpVAG		;cumprimento do quadrado
+		mov cx,COMVAG		;chama a variavel
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+		mov dx,INITVAG		;chama a variavel
+		ADD DX,10H
+		mov cx,COMVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+	ret
+MCOIN endp
+ECOIN proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repetCE:
+		mov cx,COEVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,02
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repetCE			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+		ADD dx,5H
+		mov bx,cumpVAG		;cumprimento do quadrado
+		mov cx,COEVAG		;chama a variavel
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+		mov dx,INITVAG		;chama a variavel
+		ADD DX,10H
+		mov cx,COEVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+	ret
+ECOIN endp
 EVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repete:
@@ -312,6 +386,30 @@ repete:
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
 EVAGAO endp
+DCOIN proc near
+		mov dx,INITVAG		;ve o valor da posição inicial
+repetCD:
+		mov cx,CODVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,02
+		call rhoriz			;chama procedimento que avança a linha vertical
+		inc dx				;incrementa para a proxima linha
+		cmp dx,FIMVAG		;compara com posição final
+		jbe repetCD			;se ele for um valor abaixo ou igual continua incremenar linhas
+		mov dx,INITVAG		;move a nova posição inicial
+		ADD dx,5H
+		mov bx,cumpVAG		;cumprimento do quadrado
+		mov cx,CODVAG		;chama a variavel
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+		mov dx,INITVAG		;chama a variavel
+		ADD DX,10H
+		mov cx,CODVAG		;chama a variavel
+		mov bx,cumpVAG		;cumprimento do quadrado
+		MOV AL,00
+		call rhoriz			;chama procedimento que avança a linha vertical
+	ret
+DCOIN endp
 DVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetd:
@@ -340,15 +438,15 @@ OBTEM_SEGUNDO:
 		CALL READKEYBORD
 		CMP AL,'j'			;Compara o caracter com a letra 'j'
 		JE movEsq				;salta para o movimento que faz mexer o quadrado para a esquerda
-		CMP AL,'k'			;Compara o caracter com a letra 's'
+		CMP AL,'k'			;Compara o caracter com a letra 'k'
 		JE baixo			;salta para o movimento que faz mexer o quadrado para a baixo
 		CMP AL,'l'			;Compara o caracter com a letra 'l'
 		JE movDir				;salta para o movimento que faz mexer o quadrado para a direita
-		CMP AL,'i'			;Compara o caracter com a letra 'd'
+		CMP AL,'i'			;Compara o caracter com a letra 'i'
 		JE cima	
-		CMP AL,'p'			;Compara o caracter com a letra 'd'
+		CMP AL,'p'			;Compara o caracter com a letra 'p'
 		JE pausa	
-		CMP AL,'x'			;Compara o caracter com a letra 'd'
+		CMP AL,'x'			;Compara o caracter com a letra 'x'
 		JE scrsht	
 		CMP AL,1BH			;Compara o caracter com a TECLA 'ESQ'
 		JE finish	
@@ -444,6 +542,10 @@ READKEYBORD PROC NEAR
 		POP BX
 	RET
 READKEYBORD ENDP
+;------------------------
+;Pinta as peças do lado de Cima
+;
+;------------------------
 CIMAP PROC NEAR
 		PUSH AX
 		MOV AX,POSITION
@@ -454,45 +556,103 @@ CIMAP PROC NEAR
 		JA dcima
 		jmp fin			;Caso nenhuma das condições não seja satisfeita SAI
 ecima:
-		CALL LIMPAAREA
-		MOV AL,09		
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,09	
 		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		JMP fin
 mcima:
-		CALL LIMPAAREA
 		MOV AL,09	
 		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		JMP fin
 dcima:
-		CALL LIMPAAREA
-		MOV AL,09		
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,09	
 		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 fin:
 	RET
 CIMAP ENDP
+;------------------------
+;Pinta as peças do lado de Baixo
+;
+;------------------------
 BAIXOP PROC NEAR
 		PUSH AX
 		MOV AX,POSITION
-		CMP AX,1
+		CMP AX,1		;COMPARA COM 1 
 		POP AX
-		JB ebaixo
-		JE mbaixo
-		JA dbaixo
+		JB ebaixo		;1> é na esquerda
+		JE mbaixo		;1= é no meio
+		JA dbaixo		;1< é na direita
 		jmp fin2		;Caso nenhuma das condições não seja satisfeita repete
 ebaixo:
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
 		MOV AL,09	
 		CALL ESBAIXO
 		JMP fin2
 mbaixo:
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
 		MOV AL,09	
 		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		JMP fin2
 dbaixo:
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
 		MOV AL,09	
 		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 fin2:
 	RET
 BAIXOP ENDP
@@ -702,9 +862,9 @@ INITMOUSE PROC NEAR
 		MOV AX,1				;Mostra o cursor
 		INT 33H	
 		
-		MOV AX,04
-		MOV CX,180
-		MOV DX,100
+		MOV AX,04				;Define a posição inicial do raro
+		MOV CX,180				; Coordenada HORIZONTAL
+		MOV DX,100				; Coordenada VERTICAL
 		INT 33h
 								;
 		MOV AX,7				;Limite de movimento Horizontal
@@ -719,26 +879,21 @@ INITMOUSE PROC NEAR
 	RET
 INITMOUSE ENDP
 ;--------------------------------------------------------------------------------------------------
-;------LIMPA AREA DO JOGO---------------------------------------------------------------------------
-;LIMPA A AREA DE JOGO
-;--------------------------------------------------------------------------------------------------
-LIMPAAREA PROC NEAR
-		MOV AL,0
-		MOV DX,180;VALOR TOPO DA PEÇA
-NLINE34:
-		MOV BX,140;VAI BUSCAR O CUMPRIMENTO POR PARAMETRO
-		INC DX;VALOR TOPO DA PEÇA PASSA um PIXEL PARA BAIXO
-		MOV CX,20;VAI BUSCAR A MEDIDA DO MEIO
-		CALL rhoriz		;RISCA HORIZONTALMENTE
-		CMP DX,199
-		JNE NLINE34		;SE NÃO REPETE
-	RET
-LIMPAAREA ENDP
-;--------------------------------------------------------------------------------------------------
 ;Pede Para desenhae a peça no lado esquerdo
 LEFT PROC NEAR
 		MOV POSITION,0
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		MOV AL,09			;COR 02
 		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
@@ -746,7 +901,18 @@ LEFT ENDP
 ;Pede Para desenhae a peça no meio
 MIDLE PROC NEAR
 		MOV POSITION,1
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		MOV AL,09			;COR DO BACKGROUND
 		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
@@ -754,7 +920,18 @@ MIDLE ENDP
 ;Pede Para desenhae a peça no lado direito
 RIGHT PROC NEAR
 		MOV POSITION,2
-		CALL LIMPAAREA
+		MOV AL,00	
+		CALL MECIMA
+		MOV AL,00	
+		CALL DICIMA
+		MOV AL,00	
+		CALL ESCIMA
+		MOV AL,00	
+		CALL MEBAIXO
+		MOV AL,00	
+		CALL DIBAIXO
+		MOV AL,00	
+		CALL ESBAIXO
 		MOV AL,09			;COR 02
 		CALL DPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
