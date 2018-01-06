@@ -33,7 +33,7 @@ MYDATA SEGMENT PARA 'DATA'
 		
 		INITVAG 	DW	01
 		FIMVAG		DW	?
-		COMVAG		DW  85
+		COMVAG		DW  86
 		COEVAG		DW  60
 		CODVAG		DW  110
 		cumpVAG		DW  10
@@ -281,11 +281,26 @@ MOVVAGAO proc near
 		CMP DX,199
 		JAE RESET
 VLT:		
+		MOV DX,COEVAG
+		DEC DX
+		DEC DX
+		DEC DX
+		MOV COEVAG,DX 		;Decresce a posição do vagão 3 pixeis
+		MOV DX,CODVAG
+		INC DX
+		MOV CODVAG,DX		;Cresce a posição do vagão 1 pixeis
+		MOV DX,COMVAG
+		DEC DX
+		MOV COMVAG,DX		;Decresce a posição do vagão 1 pixeis
+		MOV DX,cumpVAG
+		INC DX
+		INC DX
+		MOV cumpVAG,DX		;Cresce o cumprimento do vagão 2 pixeis
 		mov dx,FIMVAG		;chama a variavel final
-		ADD dx,10			;avança 10 pixeis para cima
+		ADD dx,15			;avança 10 pixeis para cima
 		mov FIMVAG,dx		;devolve à variavel
 		mov dx,INITVAG		;chama a variavel da posicaooriginal
-		ADD dx,10			;avança 10 pixeis para cima
+		ADD dx,15			;avança 10 pixeis para cima
 		mov INITVAG,dx		;guarda na variavel
 		JMP FI
 RESET:
@@ -308,6 +323,10 @@ RESET:
 	CBW
 	MOV INITVAG,01H		;REPOR O VALOR DO VAGÃO DE ORIGEM
 	MOV FIMVAG,DX 		;Definir o limite do VAGÃO DE ORIGEM
+	MOV COEVAG,60		;REPOR O VALOR DO Inicial esquerdo VAGÃO DE ORIGEM
+	MOV CODVAG,110		;REPOR O VALOR DO Inicial MEIO VAGÃO DE ORIGEM
+	MOV COMVAG,86		;REPOR O VALOR DO Inicial DIREITO VAGÃO DE ORIGEM
+	MOV cumpVAG,10		;REPOR O VALOR DO Cumprimento VAGÃO DE ORIGEM
 	POP DX
 	JMP VLT
 FI:	
