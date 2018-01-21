@@ -2,6 +2,9 @@ STACK SEGMENT PARA STACK
 	DB 64 DUP ('MYSTACK ')
 STACK ENDS
 MYDATA SEGMENT PARA 'DATA'
+		;------------------
+		;MEDIDAS RELATIVAS AO BONECO
+		;------------------
 		ESQPART		DW  20
 		MEIOPART	DW  80
 		DIRPART		DW  140
@@ -11,40 +14,17 @@ MYDATA SEGMENT PARA 'DATA'
 		initpartC	DW  180
 		LIMPARTC	DW	189
 		cump		DW  20
-		
+		;------------------
+		;POSIÇÕES DO ARRAY DE POSIÇÕES
+		;------------------
 		POSARRAY1   DW 00H
 		POSARRAY2   DW 01H
 		POSARRAY3   DW 02H
 		POSARRAY4   DW 03H
-		
-		MSG00			DB      201,13 dup(205),187 ,'$'
-        fraseTempo      DB      186,' TEMPO:      ',186,'$'
-		COIN		    DB      186,' COINS:      ',186,'$'
-		MSG01			DB      204,13 dup(205),185,'$'
-        MSG02      		DB      186,' Esquerda: j ',186,'$' 
-        MSG03      		DB      186,' Direita : l ',186,'$'
-        MSG04      		DB      186,' CIMA    : i ',186,'$' 
-        MSG05      		DB      186,' BAIXO   : k ',186,'$'
-		MSG06      		DB      186,' Pausa   : p ',186,'$'
-		SCREENS    		DB      186,' P.SCREEN: x ',186,'$'
-        MSG07		    DB      204,13 dup(205),185,'$'
-        MSG08		    DB      186,' Sair:   Esc ',186,'$' 
-        MSG09		    DB      200,13 dup(205),188,'$'
-		
-		INITVAG 	DW	01
-		FIMVAG		DW	?
-		COMVAG		DW  86
-		COEVAG		DW  60
-		CODVAG		DW  110
-		cumpVAG		DW  10
-		
-		temporizador	DW 	0
-		ze				DB '0','$'
-		
-		stringVazia DW  80h DUP (' '),'$'
-		TST DB ?
-		TEMP 	DW ?
-		TESTVALUE 	DB 01,02,00,020
+		;------------------
+		;	ARRAY DE POSIÇÕES
+		;------------------
+		INSERTPOS 	DB 01,01,01,020
 					DB 02,00,01,050
 					DB 01,01,02,040
 					DB 01,01,02,010
@@ -60,13 +40,53 @@ MYDATA SEGMENT PARA 'DATA'
 					DB 01,01,00,030
 					DB 01,01,00,030
 					DB 00,01,00,030
+		;------------------------------------
+		;	MENU DE INFORMAÇÕES
+		;------------------------------------
+		MSG00		DB      23 dup(' '),201,13 dup(205),187,0AH,0DH
+					DB      23 dup(' '),186,' TEMPO:      ',186,0AH,0DH
+					DB      23 dup(' '),186,' COINS:      ',186,0AH,0DH
+					DB      23 dup(' '),204,13 dup(205),185,0AH,0DH
+					DB      23 dup(' '),186,' ESQUERDA: j ',186,0AH,0DH
+					DB      23 dup(' '),186,' DIREITA : l ',186,0AH,0DH
+					DB      23 dup(' '),186,' CIMA    : i ',186,0AH,0DH
+					DB      23 dup(' '),186,' BAIXO   : k ',186,0AH,0DH
+					DB      23 dup(' '),186,' PAUSA   : p ',186,0AH,0DH
+					DB      23 dup(' '),186,' P.SCREEN: x ',186,0AH,0DH
+					DB      23 dup(' '),204,13 dup(205),185,0AH,0DH
+					DB      23 dup(' '),186,' Sair:   Esc ',186,0AH,0DH
+					DB      23 dup(' '),200,13 dup(205),188,'$'
+		;-------------------------------------
+		;VARIAVEL RELATIVAS AO VAGAO
+		;-------------------------------------
+		INITVAG 	DW	01
+		FIMVAG		DW	?
+		COMVAG		DW  86
+		COEVAG		DW  60
+		CODVAG		DW  110
+		cumpVAG		DW  10
+		
+		temporizador	DW 	0
+		ze				DB '0','$'
+		
+		TEMP 		DW ?
+		;-----------------------------------
+		;	FICHEIROS
+		;-----------------------------------
+		;FICHEIRO lido
 		TABLE DB 80 DUP (' '),'$' 
+		;BUFFER
 		SCREEN DB 64000 DUP (' '),'$' 
 		;FILE
 		NAMEFLD DB 80 DUP (' '),'$' ; buffer para a pilha 
 		FILENAM	DB '.\coord.dat',0
 		scres	DB '.\screen.pgm',0
 		FHAND	DW ?
+		;HEADER DA IMAGEM
+		SCREEN_HEAD	DB 'P5',0AH
+					DB '# COMENT',0AH
+					DB '320 200',0AH
+					DB '255',0AH,'$'
 		;FILE MSG ERRORS
 		BADOPENF DB 'BAD OPENFILE','$'
 MYDATA ENDS
@@ -114,11 +134,14 @@ MYPROC PROC FAR
 MYPROC ENDP
 STARTVAR PROC NEAR
 		MOV SI,POSARRAY4
-		MOV AL,TESTVALUE[SI]
+		MOV AL,INSERTPOS[SI]
 		CBW
 		MOV FIMVAG,AX
 	RET
 STARTVAR ENDP
+;------------------------------
+;	FUNÇÃO DE LEITURA DO ARRAY PARA ENVIAR OS VAGOES
+;------------------------------
 CONTROLER PROC NEAR
 		PUSH CX
 		PUSH BX
@@ -133,18 +156,18 @@ CONTROLER PROC NEAR
 		CALL DVAGAO
 		CALL MOVVAGAO
 		MOV SI,POSARRAY1
-		CMP TESTVALUE[SI],01
+		CMP INSERTPOS[SI],01
 		JE ESQVAG
 		JA ESQCOIN
 		
 FESQ:
 		MOV SI,POSARRAY2
-		CMP TESTVALUE[SI],01
+		CMP INSERTPOS[SI],01
 		JE MEIVAG
 		JA MECOIN
 FMEI:
 		MOV SI,POSARRAY3
-		CMP TESTVALUE[SI],01
+		CMP INSERTPOS[SI],01
 		JE DIRVAG
 		JA DIRCOIN
 		JMP fnl
@@ -178,7 +201,10 @@ FNL:
 		POP CX
 	RET
 CONTROLER ENDP
-;SCREENSHOT INSTÁVEL
+;------------------------------------------------------
+;LEITURA DO ECRÃ
+;ESTAVEL
+;------------------------------------------------------
 READSCREEN PROC NEAR
 		PUSH DI
 		PUSH DX
@@ -195,7 +221,7 @@ HORIZ:
 		MOV AH,0DH
 		MOV BH,00
 		INT 10H
-
+		ADD AL,0FFH
 		MOV [DI],AL
 		INC DI
 		POP AX
@@ -213,20 +239,27 @@ HORIZ:
 		POP DI
 	RET
 READSCREEN ENDP
-;SCREENSHOT INSTÁVEL
+;-----------------------------------------
+;SCREENSHOT
+;-----------------------------------------
 SCREENSHOT PROC NEAR
 	MOV AH,3DH
 	MOV AL,01
-	LEA DX,scres
+	LEA DX,scres		
 	INT 21H
 	jc BadOpen1
 	mov FHAND, ax ;Save file handle
-	CALL READSCREEN
-	mov AH,40h
+	mov AH,40h			;ESCRITA
 	mov BX,FHAND
-	MOV CX,64000
+	MOV CX,24			;TAMANHO DA HEADER
+	LEA DX,SCREEN_HEAD	
+	INT 21H				;GRAVA A HEADER NO FICHEIRO
+	CALL READSCREEN
+	mov AH,40h			;ESCRITA
+	mov BX,FHAND
+	MOV CX,64000		;TAMANHO DOS PIXEIS
 	LEA DX,SCREEN
-	INT 21H
+	INT 21H				;GRAVA OS PIXEIS NO FICHEIRO
 	mov bx, FHAND
 	mov ah, 3eh ;Close file
 	int 21h
@@ -236,7 +269,9 @@ CloseError1:
 BadOpen1:
 	RET
 SCREENSHOT ENDP
-
+;------------------------------------------------------
+;	LEITURA DO FICHEIRO
+;------------------------------------------------------
 READFILE PROC NEAR
 		PUSH SI
 		MOV AH,3DH
@@ -256,8 +291,11 @@ LP:
 		cmp ax, cx ;EOF reached?
 		jne EOF
 		mov al, NAMEFLD ;Get character read
-		MOV [SI],AL
-		INC SI
+		MOV AH,02
+		MOV DL,AL
+		INT 21H			;ESCREVE NO ECRÃ
+		;MOV [SI],AL	;ESCREVE NO ARRAY
+		;INC SI	
 		jmp LP ;Read next byte
 EOF: 	
 		LEA DX,TABLE
@@ -275,7 +313,9 @@ BadOpen:
 		POP SI
 	RET
 READFILE ENDP
-
+;------------------------------------------------------
+;	INCREMENTA OS VALORES DO VAGAO PARA A SENSASÃO DE MOVIMENTO
+;------------------------------------------------------
 MOVVAGAO proc near
 		mov dx,INITVAG		;chama a variavel final
 		CMP DX,199
@@ -305,7 +345,7 @@ VLT:
 		JMP FI
 RESET:
 	PUSH DX
-	
+	;FAZ A NOVA LEITURA DA MATRIZ E REPOE VALORES ONDE OS VAGÕES COMEÇÃO
 	MOV DX,POSARRAY1
 	ADD DX,04H
 	MOV POSARRAY1,DX	;ALTERAR A POSIÇÃO DO 1.º VAGÃO
@@ -319,7 +359,7 @@ RESET:
 	ADD DX,04H
 	MOV POSARRAY4,DX	;ALTERAR A POSIÇÃO DO CUMPRIMENTO
 	MOV SI,POSARRAY4
-	MOV DL,TESTVALUE[SI]
+	MOV DL,INSERTPOS[SI]
 	CBW
 	MOV INITVAG,01H		;REPOR O VALOR DO VAGÃO DE ORIGEM
 	MOV FIMVAG,DX 		;Definir o limite do VAGÃO DE ORIGEM
@@ -332,7 +372,9 @@ RESET:
 FI:	
 	ret
 MOVVAGAO endp
-
+;-------------------------------------------------------------
+;	CHAMA OS VAGÕES DO MEIO
+;-------------------------------------------------------------
 MVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetM:
@@ -345,6 +387,9 @@ repetM:
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
 MVAGAO endp
+;-------------------------------------------------------------
+;	CHAMA OS MOEDAS DO MEIO
+;-------------------------------------------------------------
 MCOIN proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetCM:
@@ -369,6 +414,9 @@ repetCM:
 		call rhoriz			;chama procedimento que avança a linha vertical
 	ret
 MCOIN endp
+;-------------------------------------------------------------
+;	CHAMA OS MOEDAS DA ESQUERDA
+;-------------------------------------------------------------
 ECOIN proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetCE:
@@ -393,6 +441,9 @@ repetCE:
 		call rhoriz			;chama procedimento que avança a linha vertical
 	ret
 ECOIN endp
+;-------------------------------------------------------------
+;	CHAMA OS VAGÕES DA ESQUERDA
+;-------------------------------------------------------------
 EVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repete:
@@ -405,6 +456,9 @@ repete:
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
 EVAGAO endp
+;-------------------------------------------------------------
+;	CHAMA OS MOEDAS DA DIREITA
+;-------------------------------------------------------------
 DCOIN proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetCD:
@@ -429,6 +483,9 @@ repetCD:
 		call rhoriz			;chama procedimento que avança a linha vertical
 	ret
 DCOIN endp
+;-------------------------------------------------------------
+;	CHAMA OS VAGÕES DA DIREITA
+;-------------------------------------------------------------
 DVAGAO proc near
 		mov dx,INITVAG		;ve o valor da posição inicial
 repetd:
@@ -441,8 +498,10 @@ repetd:
 		mov dx,INITVAG		;move a nova posição inicial
 	ret
 DVAGAO endp
+;-------------------------------------------------------------
+;	FUNÇÃO DO CONTROLO POR RATO/TECLAS E INCREMENTAÇÃO DE TEMPO DO VAGÃOS/MOEDAS
+;-------------------------------------------------------------
 MOVIM PROC NEAR	
-		CALL INFOR
 VOLTA:	
 		CALL DOSTIME
 		call MOSTRACHRONO	;chama o cronometro
@@ -562,7 +621,7 @@ READKEYBORD PROC NEAR
 	RET
 READKEYBORD ENDP
 ;------------------------
-;Pinta as peças do lado de Cima
+;Pinta as BONECO do lado de Cima
 ;
 ;------------------------
 CIMAP PROC NEAR
@@ -619,7 +678,7 @@ fin:
 	RET
 CIMAP ENDP
 ;------------------------
-;Pinta as peças do lado de Baixo
+;Pinta as BONECO do lado de Baixo
 ;
 ;------------------------
 BAIXOP PROC NEAR
@@ -631,7 +690,7 @@ BAIXOP PROC NEAR
 		JE mbaixo		;1= é no meio
 		JA dbaixo		;1< é na direita
 		jmp fin2		;Caso nenhuma das condições não seja satisfeita repete
-ebaixo:
+ebaixo:					;MOSTRA O BONECO NA ESQUERDA EM BAIXO
 		MOV AL,00	
 		CALL MECIMA
 		MOV AL,00	
@@ -645,7 +704,7 @@ ebaixo:
 		MOV AL,09	
 		CALL ESBAIXO
 		JMP fin2
-mbaixo:
+mbaixo:					;MOSTRA O BONECO NA MEIO EM BAIXO
 		MOV AL,00	
 		CALL MECIMA
 		MOV AL,00	
@@ -659,7 +718,7 @@ mbaixo:
 		MOV AL,00	
 		CALL ESBAIXO
 		JMP fin2
-dbaixo:
+dbaixo:					;MOSTRA O BONECO NA DIREITA EM BAIXO
 		MOV AL,00	
 		CALL MECIMA
 		MOV AL,00	
@@ -675,7 +734,6 @@ dbaixo:
 fin2:
 	RET
 BAIXOP ENDP
-
 ;--------------------------------------------------------------------------
 ;Mostra a informação do lado direito do ecrã
 ;--------------------------------------------------------------------------
@@ -685,111 +743,14 @@ INFOR PROC NEAR
 	PUSH CX
 	PUSH DX
 	
-	MOV DH,4				;Linha
-	MOV DL,23				;coluna
-	CALL DEFINEPOINT		;posicionamento
+	MOV DH,4			;linha para o colocar
+	MOV DL,0			;coluna para o colocar
+	CALL POSICIONAECRA
 	
 	MOV AH,09h				;Função para escrever caracter no ecrã
 	LEA	DX,MSG00			;Mensagem a ser escrita
 	INT 21H					;Activa a função
 	
-	MOV DH,5				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,fraseTempo		;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,6				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,COIN		;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,7				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG01			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,8				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG02			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,9				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG03			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,10				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG04			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,11				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG05			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,12				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG06			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,13				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,SCREENS			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,14				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG07			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	
-	
-	MOV DH,15				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG08			;Mensagem a ser escrita
-	INT 21H					;Activa a função
-	
-	MOV DH,16				;Linha
-	MOV DL,23				;Coluna
-	CALL DEFINEPOINT		;Posicionamento
-	
-	MOV AH,09h				;Função para escrever caracter no ecrã
-	LEA	DX,MSG09			;Mensagem a ser escrita
-	INT 21H					;Activa a função
 	
 	CALL DOSTIME
 
@@ -805,6 +766,9 @@ INFOR PROC NEAR
 	POP AX
  RET
 INFOR ENDP
+;---------------------------------------------------------------
+;	FUNÇÃO QUE MOSTRA O CRONOMETRO DO ECRÃ
+;---------------------------------------------------------------
 MOSTRACHRONO PROC NEAR
 		PUSH AX
 		PUSH CX
@@ -898,7 +862,8 @@ INITMOUSE PROC NEAR
 	RET
 INITMOUSE ENDP
 ;--------------------------------------------------------------------------------------------------
-;Pede Para desenhae a peça no lado esquerdo
+;Pede Para desenhar a BONECO no lado esquerdo
+;-----------------------------------------------------------------------------------
 LEFT PROC NEAR
 		MOV POSITION,0
 		MOV AL,00	
@@ -917,7 +882,9 @@ LEFT PROC NEAR
 		CALL EPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 LEFT ENDP
-;Pede Para desenhae a peça no meio
+;---------------------------------------------------------------------------
+;Pede Para desenhar o BONECO no meio
+;---------------------------------------------------------------------------
 MIDLE PROC NEAR
 		MOV POSITION,1
 		MOV AL,00	
@@ -936,7 +903,9 @@ MIDLE PROC NEAR
 		CALL MPART			;PINTA A PEÇA COM A COR DEFINIDA EM @AL
 	RET
 MIDLE ENDP
-;Pede Para desenhae a peça no lado direito
+;------------------------------------------------------------------------
+;Pede Para desenhae a BONECO no lado direito
+;------------------------------------------------------------------------
 RIGHT PROC NEAR
 		MOV POSITION,2
 		MOV AL,00	
@@ -1018,7 +987,9 @@ FINA3:
 		POP DX
 	RET
 DPART ENDP
-;Desenha a peça na ESQUERDA em BAIXO
+;----------------------------------------------------------------------------
+;Desenha a BONECO na ESQUERDA em BAIXO
+;----------------------------------------------------------------------------
 ESBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1041,7 +1012,9 @@ NLINE2:
 		POP DX
 	RET
 ESBAIXO ENDP
-;Desenha a peça no MEIO em BAIXO
+;-----------------------------------------------------------------------------
+;Desenha a BONECO no MEIO em BAIXO
+;-----------------------------------------------------------------------------
 MEBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1064,7 +1037,9 @@ NLINE1:
 		POP DX
 	RET
 MEBAIXO ENDP
-;Desenha a peça na DIREITA em BAIXO
+;---------------------------------------------------------------------
+;Desenha a boneco na DIREITA em BAIXO
+;---------------------------------------------------------------------
 DIBAIXO PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1087,7 +1062,9 @@ NLINE3:
 		POP DX
 	RET
 DIBAIXO ENDP
-;Desenha a peça na DIREITA em cima
+;----------------------------------------------------------------------------
+;Desenha a BONECO na DIREITA em cima
+;----------------------------------------------------------------------------
 DICIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1110,7 +1087,9 @@ NLINE32:
 		POP DX
 	RET
 DICIMA ENDP
-;Desenha a peça na ESQUERDA em cima
+;-------------------------------------------------------------------
+;Desenha a BONECO na ESQUERDA em cima
+;-------------------------------------------------------------------
 ESCIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1133,7 +1112,9 @@ NLINE22:
 		POP DX
 	RET
 ESCIMA ENDP
-;Desenha a peça no meio em cima
+;-----------------------------------------------------------------------
+;Desenha a BONECO no meio em cima
+;-----------------------------------------------------------------------
 MECIMA PROC NEAR
 		PUSH DX
 		PUSH CX
@@ -1181,21 +1162,6 @@ TABGAME PROC NEAR
 		mov bx,199			;cumprimento
 		call reta4
 		
-		mov dx,00			;Vertical
-		mov cx,00			;Horizontal
-		mov bx,180			;cumprimento
-		call rhoriz
-		
-		mov dx,00			;Vertical
-		mov cx,00			;Horizontal
-		mov bx,199			;cumprimento
-		call rVertic
-
-		mov dx,199			;Vertical
-		mov cx,0h			;Horizontal
-		mov bx,180			;cumprimento
-		call rhoriz
-
 		mov dx,0			;Vertical
 		mov cx,180			;Horizontal
 		mov bx,199			;cumprimento
@@ -1252,10 +1218,10 @@ reta1 proc near
 inicio3:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
 	je sai3					;se sim sai	
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
 	DEC bx
 	DEC CX
 	jmp inicio3				;Volta a verificar
@@ -1273,10 +1239,10 @@ reta2 proc near
 inicio4:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
 	je sai4					;se sim sai
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
 	DEC bx
 	INC CX	
 	jmp inicio4				;Volta a verificar
@@ -1294,16 +1260,16 @@ reta3 proc near
 inicio5:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
 	je sai5					;se sim sai
-	CALL ANGULNEG ;ABRE o ANGULO
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
+	CALL ANGULAR ;ABRE o ANGULO
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
 	DEC bx
 	DEC CX
 	jmp inicio5				;Volta a verificar
@@ -1321,28 +1287,28 @@ reta4 proc near
 inicio6:
 	cmp bx,00h				;compara se o bx chegou ao valor mínimo
 	je sai6					;se sim sai
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
-	CALL ANGULNEG
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
+	CALL ANGULAR
 	DEC bx
 	INC CX					;decrementa o valor da representação o tamanho do comprimento da reta
 	jmp inicio6				;Volta a verificar
 sai6:
 	ret						;Termina o procedimento
 reta4 endp 
-ANGULNEG PROC NEAR
+ANGULAR PROC NEAR
 		MOV AH,12				;Escreve o pixel no ecrã
 		INT 10h					;Interrupção 10h(Video)
 		Inc dx
 	RET
-ANGULNEG ENDP
+ANGULAR ENDP
 ;---------------------------
 ;-Converte o código em ASCCI
 ;ESTAVEL
